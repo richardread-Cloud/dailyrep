@@ -11,7 +11,9 @@ npm test                 # progression rules, warm-ups and storage
 npm run build:artifact   # one-file test build: dist-artifact/dailyrep.html
 ```
 
-The test build is published as a private page for trying the app on a phone. The installable home-screen app (offline support and icon), Google sign-in and Supabase sync come next. See docs/adr/0002 and 0003.
+**Live app:** https://richardread-cloud.github.io/dailyrep/. On iPhone, open it in Safari and tap Share, then Add to Home Screen. Every push to `main` runs the tests, builds and redeploys (`.github/workflows/deploy.yml`). The app works offline after the first visit.
+
+Google sign-in and Supabase sync come next (see docs/adr/0002 and 0003). Until then, data lives only on the phone, so use Settings, then Backup.
 
 ## Layout
 
