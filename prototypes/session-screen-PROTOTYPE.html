@@ -1,0 +1,689 @@
+<meta charset="utf-8">
+<title>Gym Session Screens</title>
+<!-- PROTOTYPE — throwaway. Opens on a screen with today's quote; "Start session" leads to the layouts of the in-gym Session screen, switchable via #A to #D and the floating bar. Sample data only. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one phone-width column (max 420px) holding the active variant; an inverted floating pill switches variants. */
+:root {
+  --bg: #f5f5f2; --surface: #ffffff; --ink: #2c2c24; --muted: #66665b; --line: #dddcd4;
+  --accent: #f87f3b; --accent-ink: #2c2c24; --accent-text: #b8541a; --soft: #fde8da;
+  --good: #2a8648; --good-soft: #e3f1e7; --warn: #9c620f; --warn-soft: #faefd9;
+  /* competition plate colours (IWF): fixed in both themes */
+  --p25: #cf2f2a; --p20: #2b5fb4; --p15: #e3b51c; --p10: #2e8b4c; --p5: #f4f4f2; --p2_5: #cf2f2a; --p1_25: #b4b8b6;
+  --on-plate: #ffffff; --on-plate-light: #1a1a1a;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #2c2c24; --surface: #36362d; --ink: #f5f5f2; --muted: #aaa99d; --line: #48483d;
+    --accent: #f87f3b; --accent-ink: #2c2c24; --accent-text: #fa9a62; --soft: #4b3626;
+    --good: #5cc283; --good-soft: #2f3f2c; --warn: #e6a94c; --warn-soft: #453a22;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #2c2c24; --surface: #36362d; --ink: #f5f5f2; --muted: #aaa99d; --line: #48483d;
+  --accent: #f87f3b; --accent-ink: #2c2c24; --accent-text: #fa9a62; --soft: #4b3626;
+  --good: #5cc283; --good-soft: #2f3f2c; --warn: #e6a94c; --warn-soft: #453a22;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4; }
+.wrap { max-width: 420px; margin: 0 auto; padding-inline: 16px; padding-block: 10px 96px; }
+.proto-note { font-size: 12px; color: var(--muted); text-align: center; margin: 0 0 10px; }
+h1, h2 { margin: 0; text-wrap: balance; }
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.grow { flex: 1; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:disabled { opacity: .35; cursor: default; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-primary { width: 100%; padding: 18px; border-radius: 14px; background: var(--accent); color: var(--accent-ink);
+  font-family: var(--display); font-weight: 700; font-size: 24px; letter-spacing: .05em; text-transform: uppercase; }
+.btn-ghost { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 14px; font-weight: 600; font-size: 15px; }
+.link { color: var(--muted); text-decoration: underline; font-size: 14px; }
+
+/* plates */
+.plates { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.pl { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 4px; border-radius: 50%;
+  font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--on-plate); border: 1px solid var(--line); }
+.pl-25 { background: var(--p25); } .pl-20 { background: var(--p20); } .pl-10 { background: var(--p10); } .pl-2_5 { background: var(--p2_5); }
+.pl-15 { background: var(--p15); color: var(--on-plate-light); } .pl-5 { background: var(--p5); color: var(--on-plate-light); }
+.pl-1_25 { background: var(--p1_25); color: var(--on-plate-light); }
+.pf { stroke: var(--line); stroke-width: 1; }
+.pf-25 { fill: var(--p25); } .pf-20 { fill: var(--p20); } .pf-15 { fill: var(--p15); } .pf-10 { fill: var(--p10); }
+.pf-5 { fill: var(--p5); } .pf-2_5 { fill: var(--p2_5); } .pf-1_25 { fill: var(--p1_25); }
+.steel { fill: var(--muted); }
+
+/* shared bits */
+.drop { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; font-size: 15px; }
+.drop b { color: var(--warn); }
+.drop-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.rir-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.rir-chips button { min-width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+  font-family: var(--display); font-weight: 600; font-size: 20px; padding: 0 10px; }
+.rir-chips button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* ---------- Variant A: one set at a time ---------- */
+.a { display: flex; flex-direction: column; gap: 14px; min-height: calc(100dvh - 140px); }
+.a-dots { display: flex; gap: 5px; margin-bottom: 10px; }
+.a-dot { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.a-dot.done { background: var(--good); }
+.a-dot.on { background: var(--accent); }
+.a-name { font-family: var(--display); font-size: 36px; font-weight: 700; line-height: 1.05; margin-top: 2px; }
+.a-card { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 20px 18px; }
+.a-weight { font-size: 84px; font-weight: 700; line-height: .9; }
+.a-weight small { font-size: 28px; color: var(--muted); font-weight: 600; }
+.a-stepper { display: flex; align-items: center; gap: 18px; }
+.a-stepper button { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--line); font-size: 34px; font-weight: 500; }
+.a-reps { font-size: 68px; font-weight: 700; line-height: 1; min-width: 72px; }
+.a-rir { display: grid; gap: 6px; }
+.a-ring { position: relative; width: min(240px, 70vw); aspect-ratio: 1; max-width: 100%; }
+.a-ring svg { width: 100%; height: 100%; }
+.ring-bg { fill: none; stroke: var(--line); stroke-width: 14; }
+.ring-fg { fill: none; stroke: var(--accent); stroke-width: 14; stroke-linecap: round; }
+.a-ringtxt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 64px; font-weight: 700; }
+.a-timebtns { display: flex; gap: 8px; }
+.a-upnext { border-top: 1px solid var(--line); padding-top: 12px; width: 100%; }
+.a-last { width: 100%; display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.a-lastrows { display: grid; gap: 2px; text-align: left; }
+.a-lastrow { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 4px 8px; border-radius: 8px; color: var(--muted); }
+.a-lastrow .num { font-size: 22px; font-weight: 600; }
+.a-lastrow.now { background: var(--soft); color: var(--ink); }
+.a-lastrow.now .num { font-weight: 700; }
+.a-lastrow .rir { font-size: 14px; }
+.a-last-note { font-size: 14px; color: var(--good); font-weight: 600; }
+.pill-go { background: var(--good-soft); color: var(--good); font-weight: 600; border-radius: 99px; padding: 4px 12px; font-size: 14px; }
+.a-summary { display: grid; gap: 6px; font-size: 22px; }
+.a-nav { display: flex; justify-content: space-between; gap: 8px; }
+.a-nav .btn-ghost { font-size: 14px; max-width: 48%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Variant B: whole session list ---------- */
+.b-top { display: flex; justify-content: space-between; align-items: end; margin-bottom: 12px; }
+.b-title { font-family: var(--display); font-size: 30px; font-weight: 700; }
+.b-prog { font-size: 28px; font-weight: 700; }
+.b-prog span { font-size: 16px; }
+.b-ex { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+.b-ex.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.b-exhead { display: flex; justify-content: space-between; align-items: start; gap: 8px; padding: 12px 14px; }
+.b-name { font-size: 18px; font-weight: 600; }
+.b-count { font-size: 22px; font-weight: 700; color: var(--muted); }
+.b-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto 40px; gap: 8px; align-items: center;
+  min-height: 52px; padding: 6px 12px 6px 14px; border-top: 1px solid var(--line); }
+.b-row.warm { color: var(--muted); min-height: 44px; font-size: 14px; }
+.b-row.logged { background: var(--good-soft); }
+.b-row.future { color: var(--muted); }
+.b-row.active { background: var(--soft); }
+.b-set { font-weight: 600; font-size: 14px; color: var(--muted); }
+.b-w { font-size: 20px; font-weight: 600; min-width: 0; }
+.b-pl { display: block; font-family: var(--body); font-size: 12px; color: var(--muted); font-weight: 400; }
+.b-fixed { font-size: 18px; }
+.b-step { display: inline-flex; align-items: center; gap: 4px; }
+.b-step button { width: 32px; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 20px; }
+.b-step span { min-width: 26px; text-align: center; font-size: 22px; font-weight: 700; }
+.b-rir { font-size: 15px; color: var(--muted); }
+.b-rirbtn { border: 1px dashed var(--line); border-radius: 8px; padding: 6px 6px; background: var(--surface); }
+.b-check { width: 40px; height: 40px; border-radius: 10px; border: 2px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; }
+.logged .b-check { background: var(--good); border-color: var(--good); color: var(--surface); }
+.active .b-check { border-color: var(--accent); color: var(--accent-text); }
+.b-droprow { padding: 8px 12px 12px; border-top: 1px solid var(--line); }
+.b-restbar { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); margin-top: 12px; overflow: hidden;
+  background: var(--ink); color: var(--bg); border-radius: 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.b-restbar.go { background: var(--good); color: var(--surface); }
+.b-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: .35; width: 100%; }
+.b-restin { position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 12px; flex-wrap: wrap; }
+.b-restbar .eyebrow { color: inherit; opacity: .7; }
+.b-rt { font-size: 32px; font-weight: 700; line-height: 1; }
+.b-next { flex: 1; min-width: 0; font-size: 13px; opacity: .85; }
+.b-rb { display: flex; gap: 6px; }
+.b-rb button { border: 1px solid currentColor; border-radius: 8px; padding: 6px 8px; font-size: 14px; font-weight: 600; }
+
+/* ---------- Variant C: timer-led, one-tap reps ---------- */
+.c { display: flex; flex-direction: column; gap: 12px; }
+.c-clock { border-radius: 22px; padding: 16px 16px 18px; text-align: center; background: var(--ink); color: var(--bg); display: grid; gap: 6px; justify-items: center; }
+.c-clock.resting { background: var(--accent); color: var(--accent-ink); }
+.c-clock.go { background: var(--good); color: var(--surface); }
+.c-lbl { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; opacity: .8; }
+.c-time { font-size: 104px; font-weight: 700; line-height: .9; }
+.c-next { font-size: 14px; opacity: .9; }
+.c-track { width: 100%; height: 6px; border-radius: 3px; background: rgba(127, 127, 127, .35); overflow: hidden; }
+.c-fill { height: 100%; width: 100%; background: currentColor; }
+.c-tbtns { display: flex; gap: 8px; margin-top: 4px; }
+.c-tbtns button, .c-go { border: 1.5px solid currentColor; border-radius: 10px; padding: 8px 14px; font-weight: 600; }
+.c-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.c-chip { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 6px 12px; font-size: 14px; white-space: nowrap; }
+.c-chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.c-chip.done:not(.on) { color: var(--good); }
+.c-work { display: grid; gap: 10px; }
+.c-wline { display: flex; justify-content: space-between; align-items: end; gap: 8px; flex-wrap: wrap; }
+.c-weight { font-size: 56px; font-weight: 700; line-height: 1; }
+.c-weight small { font-size: 22px; color: var(--muted); }
+.c-logged { display: flex; gap: 6px; flex-wrap: wrap; justify-content: end; font-size: 17px; }
+.c-logged span { background: var(--good-soft); color: var(--good); border-radius: 6px; padding: 2px 6px; }
+.c-bar { width: 100%; max-width: 100%; height: auto; display: block; }
+.c-warm { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.c-wchip { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 8px; font-family: var(--display); font-size: 17px; font-weight: 600; }
+.c-wchip.done { background: var(--good-soft); color: var(--good); border-color: transparent; opacity: 1; }
+.c-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.c-rep { position: relative; height: 68px; border-radius: 14px; font-size: 32px; font-weight: 700; background: var(--surface); }
+.c-rep.in { border: 2px solid var(--ink); }
+.c-rep.out { border: 2px dashed var(--line); color: var(--muted); }
+.c-last { position: absolute; bottom: 4px; left: 0; right: 0; font-family: var(--body); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-text); }
+.c-rir { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px; display: grid; gap: 8px; justify-items: center; text-align: center; }
+
+/* ---------- exercise demos (animated illustrations) ---------- */
+/* Demo figures are styled by exercise-library.js from the colour tokens above. */
+.a-headrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.a-headrow > div { min-width: 0; }
+.a-demo { flex: none; position: relative; width: 84px; height: 84px; padding: 4px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); --fig-bg: var(--surface); }
+.a-demo .fig .fg-path { display: none; }   /* the weight's dotted path only shows in the large view */
+.a-demo-tag { position: absolute; right: 4px; bottom: 3px; background: var(--surface); padding: 0 3px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.howto { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .55); }
+.howto-card { width: min(400px, 100%); max-height: 100%; overflow-y: auto; display: grid; gap: 12px; padding: 18px; border-radius: 20px; background: var(--surface); text-align: left; cursor: default; }
+.howto-fig { position: relative; background: var(--bg); border-radius: 14px; padding: 8px; }
+.phase { position: absolute; left: 12px; top: 12px; padding: 3px 10px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line);
+  font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; line-height: 1.3; }
+.phase:empty { display: none; }
+.howto-card ol, .howto-card ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.howto-card section { display: grid; gap: 6px; }
+.howto-card h3 { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.howto-card .works { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+.howto-card .faults { list-style: none; padding-left: 0; gap: 8px; }
+.howto-card .faults b { font-weight: 600; }
+.howto-card .faults span { color: var(--muted); }
+.howto-card .safety { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--soft); font-size: 15px; }
+/* While the Demo plays, the cue for the current part of the rep stands out */
+.howto-card ol.live li { color: var(--muted); }
+.howto-card ol.live li.on { color: var(--ink); }
+.howto-card ol.live li.on::marker { color: var(--accent-text); font-weight: 700; }
+.howto-top { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.howto-top > div { min-width: 0; }
+.howto-top h2 { font-family: var(--display); font-size: 28px; font-weight: 700; }
+
+/* ---------- Variant D: A with a session-list view ---------- */
+.seg { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  padding: 4px; margin-bottom: 14px; border-radius: 12px; background: var(--line); }
+.seg button { padding: 10px 8px; border-radius: 9px; font-weight: 600; font-size: 15px; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.seg .num { font-size: 17px; }
+.b-exlink { width: 100%; text-align: left; }
+.b-open { font-size: 13px; color: var(--accent-text); font-weight: 600; }
+
+/* ---------- opening screen: shown each time the app is opened, with the day's quote ---------- */
+.open { position: fixed; inset: 0; z-index: 40; overflow-y: auto; display: flex; justify-content: center; background: var(--bg);
+  padding: calc(18px + env(safe-area-inset-top, 0px)) 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+.open-in { width: 100%; max-width: 420px; min-height: 100%; display: flex; flex-direction: column; gap: 18px; }
+.open .brand-mark { width: 32px; height: 37px; }
+.open .brand-word { font-size: 29px; }
+.open-quote { flex: 1; width: 100%; margin: 0; display: flex; flex-direction: column; justify-content: center; gap: 14px; text-align: left; padding: 12px 0; }
+.open-mark { font-family: var(--display); font-weight: 700; font-size: 96px; line-height: .6; height: 38px; color: var(--accent); }
+.open-q { margin: 0; font-family: var(--display); font-weight: 700; font-size: clamp(31px, 9.4vw, 40px); line-height: 1.08; text-wrap: balance; }
+.open-q.long { font-size: clamp(27px, 8vw, 33px); }
+.open-by { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; font-weight: 500; }
+.open-by::before { content: ""; flex: none; width: 24px; height: 3px; border-radius: 2px; background: var(--accent); }
+.open-today { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 2px 12px; }
+.open-today h1 { font-family: var(--display); font-size: 30px; font-weight: 700; line-height: 1.05; white-space: nowrap; }
+.open-today .num { font-size: 20px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.open-foot { display: grid; gap: 14px; }
+
+/* ---------- prototype switcher (not part of the design) ---------- */
+.sw { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  display: flex; align-items: center; gap: 2px; max-width: calc(100% - 16px);
+  background: var(--ink); color: var(--bg); border-radius: 999px; padding: 5px; box-shadow: 0 6px 24px rgba(0, 0, 0, .3); font-size: 13px; }
+.sw button { color: var(--bg); padding: 8px 10px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.sw .arrow { font-size: 18px; line-height: 1; padding: 6px 12px; }
+.sw .lab { padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sw .sep { width: 1px; align-self: stretch; background: var(--bg); opacity: .25; margin: 4px 2px; }
+.sw .opt { opacity: .75; font-weight: 500; }
+.sw .opt.on { opacity: 1; text-decoration: underline; }
+@media (prefers-reduced-motion: no-preference) { .b-fill, .c-fill { transition: width .25s linear; } }
+/* DailyRep wordmark: the mark's upright stroke follows the text colour so it works on light and dark grounds */
+.brand { display: inline-flex; align-items: center; gap: 8px; }
+.brand-mark { width: 22px; height: 25px; flex: none; }
+.brand-mark .stroke { fill: var(--ink); }
+.brand-mark .ring { fill: none; stroke: var(--accent); stroke-width: 14; }
+.brand-word { font-family: "Montserrat", var(--body); font-size: 20px; font-weight: 400; letter-spacing: -.01em; line-height: 1; }
+.brand-word b { font-weight: 700; color: var(--accent); }
+.brandbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.brandbar .proto-note { margin: 0; text-align: right; }
+</style>
+
+<div class="wrap" id="shell">
+  <div class="brandbar"><button class="brand" data-act="home" aria-label="DailyRep: back to the opening screen"><svg class="brand-mark" viewBox="16 10 70 80" aria-hidden="true"><rect class="stroke" x="20" y="14" width="14" height="72" rx="2"/><polygon class="stroke" points="42,48 58,48 82,86 65,86"/><circle class="ring" cx="56" cy="36" r="15"/></svg><span class="brand-word" aria-hidden="true">Daily<b>Rep</b></span></button><p class="proto-note">Prototype · <span id="wake">tap anything to keep the screen awake</span></p></div>
+  <div id="app"></div>
+</div>
+
+<div class="open" id="open">
+  <div class="open-in">
+    <span class="brand" role="img" aria-label="DailyRep"><svg class="brand-mark" viewBox="16 10 70 80" aria-hidden="true"><rect class="stroke" x="20" y="14" width="14" height="72" rx="2"/><polygon class="stroke" points="42,48 58,48 82,86 65,86"/><circle class="ring" cx="56" cy="36" r="15"/></svg><span class="brand-word" aria-hidden="true">Daily<b>Rep</b></span></span>
+    <figure class="open-quote" id="openquote">
+      <span class="open-mark" aria-hidden="true">&ldquo;</span>
+      <blockquote class="open-q" id="openq"></blockquote>
+      <figcaption class="open-by" id="openby"></figcaption>
+    </figure>
+    <div class="open-foot">
+      <div class="open-today"><div><div class="eyebrow">Today</div><h1>Full Body A</h1></div><span class="num" id="opensum"></span></div>
+      <button class="btn-primary" data-act="start">Start session</button>
+    </div>
+  </div>
+</div>
+
+<div class="sw" id="sw" role="toolbar" aria-label="Prototype layout switcher">
+  <button class="arrow" data-act="vprev" aria-label="Previous layout">‹</button>
+  <span class="lab" id="swlab"></span>
+  <button class="arrow" data-act="vnext" aria-label="Next layout">›</button>
+  <span class="sep"></span>
+  <button class="opt" data-act="fast" id="fastbtn">10 s rests</button>
+  <button class="opt" data-act="reset">Reset</button>
+</div>
+
+<script src="exercise-library.js"></script>
+<script src="quotes.js"></script>
+<script>
+// ---------- sample data: Full Body A ----------
+const EX = [
+  { name: 'Back Squat',       kind: 'barbell',  demo: 'back-squat', target: 80,   min: 5,  max: 8,  sets: 3, rest: 180, inc: 2.5, lastW: 80,   last: [7, 6, 6], lastRir: [2, 1, 0] },
+  { name: 'Bench Press',      kind: 'barbell',  demo: 'bench-press', target: 62.5, min: 5,  max: 8,  sets: 3, rest: 180, inc: 2.5, lastW: 62.5, last: [8, 7, 6], lastRir: [null, null, 1] },
+  { name: 'Barbell Row',      kind: 'barbell',  demo: 'barbell-row', target: 60,   min: 6,  max: 10, sets: 3, rest: 120, inc: 2.5, lastW: 57.5, last: [10, 10, 10], lastRir: [2, 2, 1] },
+  { name: 'DB Lateral Raise', kind: 'dumbbell', demo: 'db-lateral-raise', target: 8,    min: 10, max: 15, sets: 3, rest: 60,  inc: 2,   lastW: 8,    last: [14, 13, 12], lastRir: [null, null, null] },
+  { name: 'Triceps Pushdown', kind: 'cable',    demo: 'triceps-pushdown', target: 25,   min: 10, max: 15, sets: 2, rest: 60,  inc: 2.5, lastW: 25,   last: [13, 12], lastRir: [null, null] },
+];
+
+// ---------- Demos come from the shared Built-in Exercise library ----------
+const { figSVG, byId: LIB, startAnimation } = window.WorkoutLibrary;
+let howTo = null;
+function howToOverlay() {
+  if (howTo === null) return '';
+  const e = EX[howTo], f = LIB[e.demo];
+  return `<div class="howto" data-act="closehowto"><div class="howto-card" data-act="noop" role="dialog" aria-label="How to do ${e.name}">
+    <div class="howto-top"><div><h2>${e.name}</h2><p class="works">Works: ${f.form.works.toLowerCase()}</p></div><button class="btn-ghost" data-act="closehowto">Close</button></div>
+    <div class="howto-fig">${figSVG(e.demo, `Animation of ${e.name}`)}<span class="phase" id="phase" aria-hidden="true"></span></div>
+    <section><h3>The rep</h3><ol id="cues">${f.cues.map((c) => `<li>${c}</li>`).join('')}</ol></section>
+    <section><h3>Set-up</h3><ul>${f.form.setup.map((c) => `<li>${c}</li>`).join('')}</ul></section>
+    <section><h3>Common mistakes</h3><ul class="faults">${f.form.mistakes.map(([fault, fix]) => `<li><b>${fault}.</b> <span>${fix}</span></li>`).join('')}</ul></section>
+    ${f.form.safety ? `<p class="safety">${f.form.safety}</p>` : ''}</div></div>`;
+}
+const BAR = 20, PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+
+const r2 = (x) => Math.round(x * 100) / 100;
+const roundTo = (x, inc) => r2(Math.round(x / inc) * inc);
+const kg = (w) => String(r2(w));
+const cls = (p) => String(p).replace('.', '_');
+const range = (a, b) => Array.from({ length: b - a + 1 }, (_, k) => a + k);
+const fmtT = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+function plates(w) {
+  let per = r2((w - BAR) / 2); const out = [];
+  for (const p of PLATES) while (per >= p - 1e-9) { out.push(p); per = r2(per - p); }
+  return out;
+}
+function warmups(e) {
+  if (e.kind !== 'barbell') return [];
+  const list = [{ w: BAR, reps: 10 }];
+  for (const [pct, reps] of [[.5, 8], [.7, 5], [.85, 3]]) {
+    const w = roundTo(e.target * pct, 2.5);
+    if (w > BAR && w < e.target && !list.some((x) => x.w === w)) list.push({ w, reps });
+  }
+  return list;
+}
+const plateChips = (w) => plates(w).map((p) => `<span class="pl pl-${cls(p)}">${p}</span>`).join('');
+function barbellSVG(w) {
+  const H = { 25: 1, 20: .92, 15: .8, 10: .68, 5: .5, 2.5: .4, 1.25: .34 };
+  const W = { 25: 16, 20: 14, 15: 12, 10: 11, 5: 8, 2.5: 7, 1.25: 6 };
+  let x = 76;
+  const rects = plates(w).map((p) => { const h = H[p] * 84; const r = `<rect x="${x}" y="${(96 - h) / 2}" width="${W[p]}" height="${h}" rx="2" class="pf pf-${cls(p)}"/>`; x += W[p] + 2; return r; }).join('');
+  return `<svg class="c-bar" viewBox="0 0 240 96" role="img" aria-label="One side of the bar: ${plates(w).join(', ') || 'empty'}">
+    <rect x="0" y="44" width="240" height="8" rx="2" class="steel"/><rect x="62" y="32" width="12" height="32" rx="2" class="steel"/>${rects}</svg>`;
+}
+
+// ---------- stub session state ----------
+const fresh = () => ({ ex: 0, log: EX.map(() => []), weight: EX.map((e) => e.target), warm: EX.map(() => 0),
+  drafts: {}, drop: null, timer: null, ready: false, rirFor: null });
+let S = fresh(), fast = false;
+
+function draft(i, k) {
+  const key = `${i}-${k}`;
+  const e = EX[i], sameWeight = e.lastW === S.weight[i];
+  if (!S.drafts[key]) S.drafts[key] = { reps: sameWeight ? (e.last[k] ?? e.min) : e.min, rir: null };
+  return S.drafts[key];
+}
+// Last Session's results for an Exercise; `now` highlights the set number being performed (-1 for none)
+function lastSessionBox(i, now) {
+  const e = EX[i];
+  const rows = e.last.map((reps, k) => `<div class="a-lastrow ${k === now ? 'now' : ''}"><span class="small">Set ${k + 1}</span>
+    <span class="num">${kg(e.lastW)} kg × ${reps}</span><span class="rir">${e.lastRir[k] === null || e.lastRir[k] === undefined ? '' : 'RIR ' + e.lastRir[k]}</span></div>`).join('');
+  let note = '';
+  if (now >= 0) {
+    const ls = lastSet(i, now), diff = ls ? r2(S.weight[i] - ls.w) : 0;
+    note = !ls ? `<div class="small muted">No set ${now + 1} last time</div>`
+      : diff > 0 ? `<div class="a-last-note">Weight up ${kg(diff)} kg since then: aim for ${e.min}+ reps</div>`
+      : diff < 0 ? `<div class="a-last-note">${kg(-diff)} kg lighter today</div>`
+      : `<div class="a-last-note">Same weight: beat ${ls.reps} reps</div>`;
+  }
+  return `<div class="a-last"><div class="eyebrow">Last session</div><div class="a-lastrows">${rows}</div>${note}</div>`;
+}
+// What was lifted for this same set number last Session
+function lastSet(i, k) {
+  const e = EX[i];
+  if (e.last[k] === undefined) return null;
+  return { w: e.lastW, reps: e.last[k], rir: e.lastRir[k] ?? null };
+}
+function logSet(i, reps, rir) {
+  const e = EX[i];
+  S.log[i].push({ w: S.weight[i], reps, rir });
+  S.ex = i; S.ready = false;
+  const remaining = e.sets - S.log[i].length;
+  S.drop = reps < e.min && remaining > 0 ? i : null;
+  S.rirFor = { i, k: S.log[i].length - 1 };
+  const lastOfSession = i === EX.length - 1 && remaining === 0;
+  if (!lastOfSession) { const ms = (fast ? 10 : e.rest) * 1000; S.timer = { ends: Date.now() + ms, dur: ms, i }; }
+}
+function endRest(beepIt) { S.timer = null; S.ready = true; if (beepIt) beep(); }
+function nextUp() {
+  const i = S.timer ? S.timer.i : S.ex, e = EX[i], d = S.log[i].length;
+  if (d < e.sets) return `${e.name} · set ${d + 1} of ${e.sets} · ${kg(S.weight[i])} kg`;
+  return EX[i + 1] ? `Next exercise: ${EX[i + 1].name}` : 'Session complete';
+}
+function dropBanner(i) {
+  if (S.drop !== i) return '';
+  const e = EX[i];
+  return `<div class="drop"><div><b>Below ${e.min} reps.</b> Drop to ${kg(S.weight[i] - e.inc)} kg for the remaining sets? Next session's target stays ${kg(e.target)} kg.</div>
+    <div class="drop-btns"><button class="btn-ghost" data-act="drop">Drop weight</button><button class="btn-ghost" data-act="nodrop">Keep going</button></div></div>`;
+}
+
+// ---------- Variant A: one set at a time ----------
+function VA() {
+  const i = S.ex, e = EX[i], wu = warmups(e), wd = S.warm[i], done = S.log[i].length;
+  const dots = EX.map((x, j) => `<button class="a-dot ${S.log[j].length >= x.sets ? 'done' : ''} ${j === i ? 'on' : ''}" data-act="goto" data-i="${j}" aria-label="${x.name}"></button>`).join('');
+  let body;
+  if (S.timer) {
+    body = `<section class="a-card"><div class="eyebrow">Rest</div>
+      <div class="a-ring"><svg viewBox="0 0 240 240"><circle cx="120" cy="120" r="104" class="ring-bg"/>
+        <circle cx="120" cy="120" r="104" class="ring-fg" data-ring stroke-dasharray="653.45" stroke-dashoffset="0" transform="rotate(-90 120 120)"/></svg>
+        <div class="a-ringtxt num" data-tl>0:00</div></div>
+      <div class="a-timebtns"><button class="btn-ghost" data-act="time" data-d="-15">−15 s</button><button class="btn-ghost" data-act="time" data-d="15">+15 s</button><button class="btn-ghost" data-act="skiprest">Skip</button></div>
+      <div class="grow"></div>
+      <div class="a-upnext"><div class="eyebrow">Up next</div><div>${nextUp()}</div></div></section>`;
+  } else if (wd < wu.length) {
+    const w = wu[wd];
+    body = `<section class="a-card"><div class="eyebrow">Warm-up ${wd + 1} of ${wu.length}</div>
+      <div class="a-weight num">${kg(w.w)}<small> kg</small></div>
+      <div class="a-reps num">× ${w.reps}</div>
+      ${lastSessionBox(i, -1)}
+      <div class="grow"></div>
+      <button class="btn-primary" data-act="warm">Done</button>
+      <button class="link" data-act="skipwarm">Skip warm-ups</button></section>`;
+  } else if (done < e.sets) {
+    const dr = draft(i, done), lastBox = lastSessionBox(i, done);
+    body = `${dropBanner(i)}<section class="a-card">${S.ready ? '<div class="pill-go">Rest over · go</div>' : ''}
+      <div class="eyebrow">Set ${done + 1} of ${e.sets}</div>
+      <div class="a-weight num">${kg(S.weight[i])}<small> kg</small></div>
+      ${lastBox}
+      <div class="a-stepper"><button data-act="reps" data-d="-1" aria-label="One fewer rep">−</button><div class="a-reps num">${dr.reps}</div><button data-act="reps" data-d="1" aria-label="One more rep">+</button></div>
+      <div class="small muted">reps · aim ${e.min}–${e.max}</div>
+      <div class="a-rir"><span class="small muted">Reps left in the tank (optional)</span>
+        <div class="rir-chips">${[0, 1, 2, 3, 4].map((v) => `<button class="${dr.rir === v ? 'on' : ''}" data-act="rir" data-v="${v}">${v === 4 ? '4+' : v}</button>`).join('')}</div></div>
+      <div class="grow"></div>
+      <button class="btn-primary" data-act="log">Done</button></section>`;
+  } else {
+    body = `<section class="a-card"><div class="eyebrow">Exercise complete</div>
+      <div class="a-summary">${S.log[i].map((s, k) => `<div class="num">Set ${k + 1}: <b>${kg(s.w)} kg × ${s.reps}</b>${s.rir === null ? '' : ` <span class="muted">RIR ${s.rir}</span>`}</div>`).join('')}</div>
+      <div class="grow"></div>
+      ${EX[i + 1] ? `<button class="btn-primary" data-act="next">Next: ${EX[i + 1].name}</button>` : '<div class="a-name">Session complete</div>'}</section>`;
+  }
+  return `<div class="a"><header><div class="a-dots">${dots}</div>
+      <div class="a-headrow"><div><div class="eyebrow">Full Body A · exercise ${i + 1} of ${EX.length}</div><h1 class="a-name">${e.name}</h1></div>
+        <button class="a-demo" data-act="howto" data-i="${i}" aria-label="How to do ${e.name}">${figSVG(e.demo, `Animation of ${e.name}`)}<span class="a-demo-tag">How to</span></button></div></header>
+    ${body}
+    <nav class="a-nav"><button class="btn-ghost" data-act="prev" ${i === 0 ? 'disabled' : ''}>‹ ${EX[i - 1]?.name ?? 'Back'}</button>
+      <button class="btn-ghost" data-act="next" ${i === EX.length - 1 ? 'disabled' : ''}>${EX[i + 1]?.name ?? 'Next'} ›</button></nav></div>`;
+}
+
+// ---------- Variant B: whole session list ----------
+function VB(linkable = false) {
+  const total = EX.reduce((a, e) => a + e.sets, 0), doneAll = S.log.reduce((a, l) => a + l.length, 0);
+  const secs = EX.map((e, i) => {
+    const wu = warmups(e), wd = S.warm[i], done = S.log[i].length;
+    const warmRows = wu.map((w, k) => `<div class="b-row warm ${k < wd ? 'logged' : ''}"><span class="b-set">W</span>
+      <span class="num b-w">${kg(w.w)} kg</span>
+      <span class="num b-fixed">× ${w.reps}</span><span></span>
+      <button class="b-check" data-act="warm" data-i="${i}" ${k === wd ? '' : 'disabled'} aria-label="Warm-up done">${k < wd ? '✓' : ''}</button></div>`).join('');
+    const rows = range(0, e.sets - 1).map((k) => {
+      if (k < done) {
+        const s = S.log[i][k];
+        return `<div class="b-row logged"><span class="b-set">${k + 1}</span><span class="num b-w">${kg(s.w)} kg</span>
+          <span class="num b-fixed">× ${s.reps}</span><span class="b-rir num">${s.rir === null ? '' : 'RIR ' + s.rir}</span><span class="b-check">✓</span></div>`;
+      }
+      const w = S.weight[i];
+      if (k === done) {
+        const dr = draft(i, k);
+        return `<div class="b-row active"><span class="b-set">${k + 1}</span>
+          <span class="num b-w">${kg(w)} kg${lastSet(i, k) ? `<span class="b-pl">last: ${kg(lastSet(i, k).w)} kg × ${lastSet(i, k).reps}</span>` : ''}</span>
+          <span class="b-step"><button data-act="reps" data-i="${i}" data-d="-1" aria-label="One fewer rep">−</button><span class="num">${dr.reps}</span><button data-act="reps" data-i="${i}" data-d="1" aria-label="One more rep">+</button></span>
+          <button class="b-rir b-rirbtn num" data-act="rircycle" data-i="${i}">${dr.rir === null ? 'RIR –' : 'RIR ' + (dr.rir === 4 ? '4+' : dr.rir)}</button>
+          <button class="b-check" data-act="log" data-i="${i}" aria-label="Log set">✓</button></div>`;
+      }
+      return `<div class="b-row future"><span class="b-set">${k + 1}</span><span class="num b-w">${kg(w)} kg</span>
+        <span class="small">${lastSet(i, k) ? `last ${kg(lastSet(i, k).w)}×${lastSet(i, k).reps}` : 'new'}</span><span></span><span class="b-check"></span></div>`;
+    }).join('');
+    const headInner = `<div><h2 class="b-name">${e.name}</h2>
+        <div class="small muted">${e.min}–${e.max} reps · rest ${fmtT(e.rest * 1000)} · last ${kg(e.lastW)} kg × ${e.last.join('/')}</div>
+        ${linkable ? '<div class="b-open">Open this exercise ›</div>' : ''}</div>
+        <span class="b-count num">${done}/${e.sets}</span>`;
+    return `<section class="b-ex ${i === S.ex ? 'on' : ''}">${linkable
+        ? `<button class="b-exhead b-exlink" data-act="focus" data-i="${i}">${headInner}</button>`
+        : `<header class="b-exhead">${headInner}</header>`}
+      ${warmRows}${rows}${S.drop === i ? `<div class="b-droprow">${dropBanner(i)}</div>` : ''}</section>`;
+  }).join('');
+  const bar = S.timer
+    ? `<div class="b-restbar"><div class="b-fill" data-bar></div><div class="b-restin">
+        <div><div class="eyebrow">Resting</div><div class="num b-rt" data-tl>0:00</div></div>
+        <div class="b-next">${nextUp()}</div>
+        <div class="b-rb"><button data-act="time" data-d="-15">−15</button><button data-act="time" data-d="15">+15</button><button data-act="skiprest">Skip</button></div></div></div>`
+    : S.ready ? `<div class="b-restbar go"><div class="b-restin"><b>Rest over</b><span class="b-next">${nextUp()}</span></div></div>` : '';
+  return `<div class="b"><header class="b-top"><div><div class="eyebrow">Today</div><h1 class="b-title">Full Body A</h1></div>
+    <div class="num b-prog">${doneAll}<span class="muted"> / ${total} sets</span></div></header>${secs}${bar}</div>`;
+}
+
+// ---------- Variant C: timer-led, one-tap reps ----------
+function VC() {
+  const i = S.ex, e = EX[i], wu = warmups(e), wd = S.warm[i], done = S.log[i].length, finished = done >= e.sets;
+  let clock;
+  if (S.timer) {
+    clock = `<section class="c-clock resting"><div class="c-lbl">Rest</div><div class="c-time num" data-tl>0:00</div>
+      <div class="c-track"><div class="c-fill" data-bar></div></div><div class="c-next">${nextUp()}</div>
+      <div class="c-tbtns"><button data-act="time" data-d="-15">−15 s</button><button data-act="time" data-d="15">+15 s</button><button data-act="skiprest">Skip</button></div></section>`;
+  } else if (finished) {
+    clock = `<section class="c-clock"><div class="c-lbl">${e.name}</div><div class="c-time num">Done</div>
+      ${EX[i + 1] ? `<button class="c-go" data-act="next">Next: ${EX[i + 1].name} ›</button>` : '<div class="c-next">Session complete</div>'}</section>`;
+  } else {
+    clock = `<section class="c-clock ${S.ready ? 'go' : ''}"><div class="c-lbl">${S.ready ? 'Rest over' : 'Ready'}</div>
+      <div class="c-time num">${S.ready ? 'GO' : `Set ${done + 1}`}</div><div class="c-next">${e.name} · set ${done + 1} of ${e.sets}</div></section>`;
+  }
+  const strip = EX.map((x, j) => `<button class="c-chip ${j === i ? 'on' : ''} ${S.log[j].length >= x.sets ? 'done' : ''}" data-act="goto" data-i="${j}">${S.log[j].length >= x.sets ? '✓ ' : ''}${x.name}</button>`).join('');
+  const w = S.weight[i];
+  const equip = e.kind === 'barbell'
+    ? `${barbellSVG(w)}<div class="small muted">Each side: ${plates(w).join(' + ') || 'empty bar'}</div>`
+    : `<div class="small muted">${e.kind === 'dumbbell' ? 'Each dumbbell' : 'Cable stack'}</div>`;
+  const warm = wu.length ? `<div class="c-warm"><span class="small muted">Warm-up</span>${wu.map((x, k) =>
+    `<button class="c-wchip ${k < wd ? 'done' : ''}" data-act="warm" data-i="${i}" ${k === wd ? '' : 'disabled'}>${k < wd ? '✓ ' : ''}${kg(x.w)}×${x.reps}</button>`).join('')}</div>` : '';
+  const logged = done ? `<div class="c-logged num">${S.log[i].map((s) => `<span>${kg(s.w)}×${s.reps}${s.rir === null ? '' : ' @' + s.rir}</span>`).join('')}</div>` : '';
+  let rir = '';
+  if (S.rirFor && S.rirFor.i === i) {
+    const s = S.log[i][S.rirFor.k];
+    rir = `<div class="c-rir"><span class="small">Set ${S.rirFor.k + 1}: ${s.reps} reps. How many reps were left in the tank?</span>
+      <div class="rir-chips">${[0, 1, 2, 3, 4].map((v) => `<button data-act="setrir" data-v="${v}">${v === 4 ? '4+' : v}</button>`).join('')}<button data-act="norir">Skip</button></div></div>`;
+  }
+  let reps = '';
+  if (!finished) {
+    const last = e.last[done];
+    reps = `<div class="small muted">Tap the reps you did to log set ${done + 1} · aim ${e.min}–${e.max}</div>
+      <div class="c-grid">${range(Math.max(1, e.min - 3), e.max + 1).map((n) =>
+        `<button class="c-rep num ${n >= e.min && n <= e.max ? 'in' : 'out'}" data-act="tapreps" data-i="${i}" data-v="${n}">${n}${n === last ? '<span class="c-last">last</span>' : ''}</button>`).join('')}</div>`;
+  }
+  return `<div class="c">${clock}<nav class="c-strip">${strip}</nav>
+    <section class="c-work"><div class="c-wline"><div class="num c-weight">${kg(w)}<small> kg</small></div>${logged}</div>
+      ${equip}${warm}${dropBanner(i)}${rir}${reps}</section></div>`;
+}
+
+// ---------- Variant D: A, with a toggle to the whole-session list ----------
+let view = 'focus';
+function VD() {
+  const total = EX.reduce((a, e) => a + e.sets, 0), doneAll = S.log.reduce((a, l) => a + l.length, 0);
+  const seg = `<div class="seg" role="tablist" aria-label="Session view">
+    <button role="tab" aria-selected="${view === 'focus'}" class="${view === 'focus' ? 'on' : ''}" data-act="view" data-v="focus">Current set</button>
+    <button role="tab" aria-selected="${view === 'list'}" class="${view === 'list' ? 'on' : ''}" data-act="view" data-v="list">Session <span class="num">${doneAll}/${total}</span></button></div>`;
+  return seg + (view === 'focus' ? VA() : VB(true));
+}
+
+// ---------- opening screen: today's quote on hard work and achievement ----------
+// The quotes live in quotes.js, the seed data for the real app. One quote per day, picked from the date.
+const { quoteForDate } = window.DailyRepQuotes;
+let opening = false;
+function paintQuote() {
+  const q = quoteForDate(new Date()), el = document.getElementById('openq');
+  el.textContent = q.q;
+  el.classList.toggle('long', q.q.length > 70);
+  document.getElementById('openby').textContent = q.by;
+}
+function showOpening(on) {
+  opening = on;
+  document.getElementById('open').hidden = !on;
+  document.getElementById('shell').inert = on;
+  document.getElementById('sw').inert = on;
+  if (!on) return;
+  document.getElementById('opensum').textContent = `${EX.length} exercises · ${EX.reduce((a, e) => a + e.sets, 0)} sets`;
+  paintQuote();
+  document.getElementById('open').scrollTop = 0;
+}
+
+// ---------- switcher + plumbing ----------
+const VARIANTS = { A: { name: 'One set at a time', fn: VA }, B: { name: 'Whole session list', fn: VB }, C: { name: 'Timer + tap reps', fn: VC },
+  D: { name: 'A + session view', fn: VD } };
+const KEYS = Object.keys(VARIANTS);
+let cur = KEYS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'D';
+let wakeMsg = 'tap anything to keep the screen awake';
+
+function setVariant(k) {
+  cur = k;
+  try { history.replaceState(null, '', '#' + k); } catch (e) { /* sandboxed */ }
+  render(); window.scrollTo(0, 0);
+}
+function cycle(d) { setVariant(KEYS[(KEYS.indexOf(cur) + d + KEYS.length) % KEYS.length]); }
+
+function render() {
+  document.getElementById('app').innerHTML = VARIANTS[cur].fn() + howToOverlay();
+  document.getElementById('swlab').textContent = `${cur} · ${VARIANTS[cur].name}`;
+  document.getElementById('fastbtn').classList.toggle('on', fast);
+  document.getElementById('wake').textContent = wakeMsg;
+  tick();
+}
+function tick() {
+  if (!S.timer) return;
+  const left = S.timer.ends - Date.now();
+  if (left <= 0) { endRest(true); render(); return; }
+  const f = left / S.timer.dur;
+  document.querySelectorAll('[data-tl]').forEach((el) => { el.textContent = fmtT(left); });
+  document.querySelectorAll('[data-ring]').forEach((el) => el.setAttribute('stroke-dashoffset', String(653.45 * (1 - f))));
+  document.querySelectorAll('[data-bar]').forEach((el) => { el.style.width = `${f * 100}%`; });
+}
+setInterval(tick, 250);
+
+// sound + screen wake lock need a first tap
+let actx = null, wl = null;
+function unlock() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!actx && AC) actx = new AC();
+    if (actx && actx.state === 'suspended') actx.resume();
+  } catch (e) { /* no audio */ }
+  requestWake();
+}
+async function requestWake() {
+  if (wl) return;
+  if (!('wakeLock' in navigator)) { wakeMsg = 'screen wake lock not supported here'; return; }
+  try {
+    wl = await navigator.wakeLock.request('screen');
+    wakeMsg = 'screen will stay awake';
+    wl.addEventListener('release', () => { wl = null; });
+  } catch (e) { wakeMsg = 'screen wake lock was refused here'; }
+  document.getElementById('wake').textContent = wakeMsg;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && actx) requestWake(); });
+function beep() {
+  if (!actx) return;
+  [0, .25, .5].forEach((t, n) => {
+    const o = actx.createOscillator(), g = actx.createGain(), at = actx.currentTime + t;
+    o.frequency.value = n === 2 ? 1320 : 880;
+    g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(.3, at + .02); g.gain.exponentialRampToValueAtTime(.0001, at + .18);
+    o.connect(g).connect(actx.destination); o.start(at); o.stop(at + .2);
+  });
+}
+
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  unlock();
+  const d = b.dataset, i = d.i !== undefined ? +d.i : S.ex, e = EX[i];
+  switch (d.act) {
+    case 'start': showOpening(false); window.scrollTo(0, 0); return;
+    case 'home': showOpening(true); return;
+    case 'vprev': cycle(-1); return;
+    case 'vnext': cycle(1); return;
+    case 'goto': S.ex = i; S.rirFor = null; break;
+    case 'warm': S.warm[i] = Math.min(S.warm[i] + 1, warmups(e).length); S.ex = i; break;
+    case 'skipwarm': S.warm[i] = warmups(e).length; break;
+    case 'reps': { const dr = draft(i, S.log[i].length); dr.reps = Math.max(0, dr.reps + +d.d); break; }
+    case 'rir': { const dr = draft(i, S.log[i].length), v = +d.v; dr.rir = dr.rir === v ? null : v; break; }
+    case 'rircycle': { const dr = draft(i, S.log[i].length), seq = [null, 0, 1, 2, 3, 4]; dr.rir = seq[(seq.indexOf(dr.rir) + 1) % seq.length]; break; }
+    case 'log': { const dr = draft(i, S.log[i].length); logSet(i, dr.reps, dr.rir); break; }
+    case 'tapreps': logSet(i, +d.v, null); break;
+    case 'setrir': if (S.rirFor) S.log[S.rirFor.i][S.rirFor.k].rir = +d.v; S.rirFor = null; break;
+    case 'norir': S.rirFor = null; break;
+    case 'drop': S.weight[S.drop] = r2(S.weight[S.drop] - EX[S.drop].inc); S.drop = null; break;
+    case 'nodrop': S.drop = null; break;
+    case 'time':
+      if (S.timer) { S.timer.ends += +d.d * 1000; S.timer.dur = Math.max(1000, S.timer.dur + +d.d * 1000); if (S.timer.ends <= Date.now()) endRest(false); }
+      break;
+    case 'skiprest': endRest(false); break;
+    case 'next': S.ex = Math.min(EX.length - 1, S.ex + 1); S.rirFor = null; S.ready = false; break;
+    case 'prev': S.ex = Math.max(0, S.ex - 1); S.rirFor = null; break;
+    case 'view': view = d.v; render(); window.scrollTo(0, 0); return;
+    case 'focus': S.ex = i; S.rirFor = null; view = 'focus'; render(); window.scrollTo(0, 0); return;
+    case 'howto': howTo = i; break;
+    case 'closehowto': howTo = null; break;
+    case 'noop': return;
+    case 'fast': fast = !fast; break;
+    case 'reset': S = fresh(); break;
+  }
+  render();
+});
+// The large Demo reports which part of the rep it is in: show the label and pick out the matching cue
+document.addEventListener('figstage', (ev) => {
+  if (!ev.target.closest('.howto')) return;
+  const phase = document.getElementById('phase'), cues = document.getElementById('cues');
+  if (!phase || !cues || ev.detail.still) return;
+  phase.textContent = ev.detail.label;
+  cues.classList.add('live');
+  [...cues.children].forEach((li, i) => li.classList.toggle('on', i === ev.detail.cue));
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.target.closest('input, textarea, [contenteditable]')) return;
+  if (opening) return;
+  if (ev.key === 'Escape' && howTo !== null) { howTo = null; render(); return; }
+  if (ev.key === 'ArrowLeft') cycle(-1);
+  if (ev.key === 'ArrowRight') cycle(1);
+});
+window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (KEYS.includes(h) && h !== cur) { cur = h; render(); } });
+
+render();
+startAnimation();
+showOpening(true);
+</script>

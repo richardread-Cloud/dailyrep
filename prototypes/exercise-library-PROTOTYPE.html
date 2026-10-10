@@ -1,0 +1,163 @@
+<meta charset="utf-8">
+<title>Exercise Library</title>
+<!-- PROTOTYPE — throwaway page over exercise-library.js (the Built-in Exercise seed data + Demos). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: a filterable grid of exercise cards (2 columns on phones, more on wide screens); tapping a card opens its Demo large. */
+:root {
+  --bg: #f5f5f2; --surface: #ffffff; --ink: #2c2c24; --muted: #66665b; --line: #dddcd4;
+  --accent: #f87f3b; --accent-ink: #2c2c24; --accent-text: #b8541a; --soft: #fde8da;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #2c2c24; --surface: #36362d; --ink: #f5f5f2; --muted: #aaa99d; --line: #48483d;
+    --accent: #f87f3b; --accent-ink: #2c2c24; --accent-text: #fa9a62; --soft: #4b3626; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #2c2c24; --surface: #36362d; --ink: #f5f5f2; --muted: #aaa99d; --line: #48483d;
+  --accent: #f87f3b; --accent-ink: #2c2c24; --accent-text: #fa9a62; --soft: #4b3626; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 48px; }
+h1, h2 { margin: 0; text-wrap: balance; }
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.top { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.top h1 { font-family: var(--display); font-size: 36px; font-weight: 700; }
+.intro { color: var(--muted); max-width: 62ch; margin: 0 0 14px; font-size: 15px; }
+.filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
+.filters button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 7px 14px; font-size: 15px; font-weight: 500; }
+.filters button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.group h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 18px 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.card { display: grid; gap: 6px; align-content: start; text-align: left; padding: 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.card:hover { border-color: var(--accent); }
+.card .figbox { background: var(--bg); border-radius: 10px; padding: 4px; }
+.card .name { font-weight: 600; line-height: 1.2; }
+.card .meta { font-size: 13px; color: var(--muted); }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.tag { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background: var(--soft); color: var(--accent-text); }
+/* Demo figures are styled by exercise-library.js from the colour tokens above. Cards skip the weight's dotted path; the large view shows it. */
+.card .fig .fg-path { display: none; }
+.howto { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .55); }
+.howto-card { width: min(420px, 100%); max-height: 100%; overflow-y: auto; display: grid; gap: 12px; padding: 18px; border-radius: 20px; background: var(--surface); }
+.howto-top { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.howto-top > div { min-width: 0; }
+.howto-top h2 { font-family: var(--display); font-size: 28px; font-weight: 700; }
+.howto-fig { position: relative; background: var(--bg); border-radius: 14px; padding: 8px; }
+.phase { position: absolute; left: 12px; top: 12px; padding: 3px 10px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line);
+  font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; line-height: 1.3; }
+.phase:empty { display: none; }
+.howto ol, .howto ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.howto section { display: grid; gap: 6px; }
+.howto h3 { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.howto .works { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+.howto .faults { list-style: none; padding-left: 0; gap: 8px; }
+.howto .faults b { font-weight: 600; }
+.howto .faults span { color: var(--muted); }
+.howto .safety { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--soft); font-size: 15px; }
+/* While the Demo plays, the cue for the current part of the rep stands out */
+.howto ol.live li { color: var(--muted); }
+.howto ol.live li.on { color: var(--ink); }
+.howto ol.live li.on::marker { color: var(--accent-text); font-weight: 700; }
+@media (prefers-reduced-motion: no-preference) { .howto ol.live li { transition: color .2s; } }
+.defaults { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.defaults div { background: var(--bg); border-radius: 10px; padding: 8px; }
+.defaults .k { font-size: 12px; color: var(--muted); }
+.defaults .v { font-size: 22px; font-weight: 700; }
+.btn-ghost { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 14px; font-weight: 600; font-size: 15px; }
+/* DailyRep wordmark: the mark's upright stroke follows the text colour so it works on light and dark grounds */
+.brand { display: inline-flex; align-items: center; gap: 8px; }
+.brand-mark { width: 22px; height: 25px; flex: none; }
+.brand-mark .stroke { fill: var(--ink); }
+.brand-mark .ring { fill: none; stroke: var(--accent); stroke-width: 14; }
+.brand-word { font-family: "Montserrat", var(--body); font-size: 20px; font-weight: 400; letter-spacing: -.01em; line-height: 1; }
+.brand-word b { font-weight: 700; color: var(--accent); }
+.brandbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.brandbar .proto-note { margin: 0; text-align: right; }
+</style>
+
+<div class="wrap">
+  <div class="brandbar"><span class="brand" role="img" aria-label="DailyRep"><svg class="brand-mark" viewBox="16 10 70 80" aria-hidden="true"><rect class="stroke" x="20" y="14" width="14" height="72" rx="2"/><polygon class="stroke" points="42,48 58,48 82,86 65,86"/><circle class="ring" cx="56" cy="36" r="15"/></svg><span class="brand-word" aria-hidden="true">Daily<b>Rep</b></span></span></div>
+  <div class="top"><h1>Exercise Library</h1><span class="muted small" id="count"></span></div>
+  <p class="intro">Built-in exercises every Lifter can add to a Template. Each has a Demo and starting defaults that the Lifter can change. Orange marks the limb doing the work. Prototype: tap any exercise to see it large, with its set-up, the cue for each part of the rep and the common mistakes.</p>
+  <div class="filters" id="filters" role="tablist" aria-label="Muscle group"></div>
+  <div id="list"></div>
+</div>
+<div id="overlay"></div>
+
+<script src="exercise-library.js"></script>
+<script>
+const { LIBRARY, byId, figSVG, startAnimation } = window.WorkoutLibrary;
+const GROUPS = ['All', ...new Set(LIBRARY.map((e) => e.group))];
+const EQUIP = { barbell: 'Barbell', dumbbell: 'Dumbbell', cable: 'Cable', machine: 'Machine', bodyweight: 'Bodyweight' };
+const fmtRest = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+let group = 'All';
+try { group = localStorage.getItem('lib-group') || 'All'; } catch (e) { /* storage unavailable */ }
+if (!GROUPS.includes(group)) group = 'All';
+
+const tags = (e) => [e.perSide ? 'Per side' : '', e.repsOnly ? 'Reps only' : e.equipment === 'bodyweight' ? 'Bodyweight + added' : ''].filter(Boolean)
+  .map((t) => `<span class="tag">${t}</span>`).join('');
+
+function render() {
+  document.getElementById('count').textContent = `${LIBRARY.length} exercises`;
+  document.getElementById('filters').innerHTML = GROUPS.map((g) =>
+    `<button role="tab" aria-selected="${g === group}" class="${g === group ? 'on' : ''}" data-group="${g}">${g}</button>`).join('');
+  const shown = GROUPS.slice(1).filter((g) => group === 'All' || g === group);
+  document.getElementById('list').innerHTML = shown.map((g) => `<section class="group"><h2>${g}</h2><div class="grid">${
+    LIBRARY.filter((e) => e.group === g).map((e) => `<button class="card" data-open="${e.id}">
+      <div class="figbox">${figSVG(e.id, `Animation of ${e.name}`)}</div>
+      <div class="name">${e.name}</div>
+      <div class="meta">${EQUIP[e.equipment]} · ${e.min}–${e.max} reps</div>
+      <div class="tags">${tags(e)}</div></button>`).join('')}</div></section>`).join('');
+}
+
+function open(id) {
+  const e = byId[id];
+  document.getElementById('overlay').innerHTML = `<div class="howto" data-close><div class="howto-card" role="dialog" aria-label="How to do ${e.name}" data-stay>
+    <div class="howto-top"><div><h2>${e.name}</h2><p class="works">Works: ${e.form.works.toLowerCase()}</p></div><button class="btn-ghost" data-close>Close</button></div>
+    <div class="howto-fig">${figSVG(e.id, `Animation of ${e.name}`)}<span class="phase" id="phase" aria-hidden="true"></span></div>
+    <section><h3>The rep</h3><ol id="cues">${e.cues.map((c) => `<li>${c}</li>`).join('')}</ol></section>
+    <section><h3>Set-up</h3><ul>${e.form.setup.map((c) => `<li>${c}</li>`).join('')}</ul></section>
+    <section><h3>Common mistakes</h3><ul class="faults">${e.form.mistakes.map(([fault, fix]) => `<li><b>${fault}.</b> <span>${fix}</span></li>`).join('')}</ul></section>
+    ${e.form.safety ? `<p class="safety">${e.form.safety}</p>` : ''}
+    <div class="defaults">
+      <div><div class="k">Rep range</div><div class="v num">${e.min}–${e.max}</div></div>
+      <div><div class="k">Rest</div><div class="v num">${fmtRest(e.rest)}</div></div>
+      ${e.repsOnly
+        ? '<div><div class="k">Weight step</div><div class="v num">None</div></div>'
+        : `<div><div class="k">${e.equipment === 'bodyweight' ? 'Added weight step' : 'Weight step'}</div><div class="v num">+${e.inc} kg</div></div>`}
+    </div>
+    <div class="tags">${tags(e)}<span class="tag">${EQUIP[e.equipment]}</span></div></div></div>`;
+}
+
+document.addEventListener('click', (ev) => {
+  const g = ev.target.closest('[data-group]');
+  if (g) { group = g.dataset.group; try { localStorage.setItem('lib-group', group); } catch (e) { /* ignore */ } render(); return; }
+  const o = ev.target.closest('[data-open]');
+  if (o) { open(o.dataset.open); return; }
+  if (ev.target.closest('[data-close]') && (!ev.target.closest('[data-stay]') || ev.target.closest('button[data-close]'))) document.getElementById('overlay').innerHTML = '';
+});
+// The large Demo reports which part of the rep it is in: show the label and pick out the matching cue
+document.addEventListener('figstage', (ev) => {
+  if (!ev.target.closest('.howto')) return;
+  const phase = document.getElementById('phase'), cues = document.getElementById('cues');
+  if (!phase || !cues || ev.detail.still) return;
+  phase.textContent = ev.detail.label;
+  cues.classList.add('live');
+  [...cues.children].forEach((li, i) => li.classList.toggle('on', i === ev.detail.cue));
+});
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') document.getElementById('overlay').innerHTML = ''; });
+
+render();
+startAnimation();
+</script>

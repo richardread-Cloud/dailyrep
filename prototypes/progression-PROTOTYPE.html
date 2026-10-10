@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Progression Prototype</title>
+<!-- PROTOTYPE — throwaway. Only the Progression module in the first <script> is meant to survive. -->
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e3e3de;
+    --accent: #2f6fde; --accent-ink: #ffffff; --accent-soft: #e6eefc;
+    --good: #1f8a4c; --warn: #b26a00; --bad: #c0392b; --changed: #fff3c4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161615; --card: #1f1f1d; --ink: #ececea; --muted: #9a9a94; --line: #33332f;
+      --accent: #6b9cf5; --accent-ink: #0d0d0c; --accent-soft: #1f2a40;
+      --good: #4cc27f; --warn: #e0a040; --bad: #ef6b5b; --changed: #4a3f12;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161615; --card: #1f1f1d; --ink: #ececea; --muted: #9a9a94; --line: #33332f;
+    --accent: #6b9cf5; --accent-ink: #0d0d0c; --accent-soft: #1f2a40;
+    --good: #4cc27f; --warn: #e0a040; --bad: #ef6b5b; --changed: #4a3f12;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
+  .intro { color: var(--muted); max-width: 760px; margin: 0 0 24px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .05em; padding: 2px 8px;
+    border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-bottom: 8px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 900px) { .grid { grid-template-columns: 1.1fr 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .event { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 14px; border-radius: 8px; margin-bottom: 16px; }
+  .event b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); margin-bottom: 2px; }
+  .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .field { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); transition: none; }
+  .field.changed { background: var(--changed); }
+  .field .k { font-size: 12px; color: var(--muted); }
+  .field .v { font-size: 17px; font-weight: 600; }
+  .field.wide { grid-column: 1 / -1; }
+  .dots span { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--warn); margin-right: 4px; vertical-align: -1px; }
+  .dots span.on { background: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  .scroll { overflow-x: auto; }
+  .o-up { color: var(--good); font-weight: 600; }
+  .o-deload { color: var(--bad); font-weight: 600; }
+  .o-hold, .o-none { color: var(--warn); font-weight: 600; }
+  .o-prog { color: var(--good); }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.sel { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .row .lbl { font-size: 13px; color: var(--muted); min-width: 90px; }
+  .stepper { display: inline-flex; align-items: center; gap: 6px; }
+  .stepper output { min-width: 32px; text-align: center; font-weight: 600; font-size: 17px; }
+  .drop { border: 1px solid var(--warn); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; color: var(--warn); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .tabs button { font-size: 13px; padding: 6px 10px; }
+  .steps { list-style: none; padding: 0; margin: 12px 0 0; }
+  .steps li { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .steps .n { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; border: 1px solid var(--line); color: var(--muted); flex: none; }
+  .steps li.done .n { background: var(--good); border-color: var(--good); color: #fff; }
+  .steps li button { text-align: left; flex: 1; }
+  .watch { font-size: 13px; background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  .watch b { color: var(--accent); }
+  .muted { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     PROGRESSION MODULE — pure, no DOM. This is the part worth keeping.
+     (state, action) => state
+     ================================================================ -->
+<script>
+const Progression = (() => {
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const avg = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const epley = (w, reps) => w * (1 + reps / 30);
+  const roundTo = (x, inc) => r2(Math.round(x / inc) * inc);
+  const fmt = (n) => `${r2(n)} kg`;
+
+  function initial(ex) {
+    return {
+      exercise: { name: ex.name, repMin: ex.repMin, repMax: ex.repMax, increment: ex.increment, sets: ex.sets },
+      targetWeight: ex.startWeight,
+      best: null,            // best average reps per Working Set at the current target weight
+      stallCount: 0,         // consecutive Sessions without progress
+      session: null,         // { sets: [{weight, reps, rir}], currentWeight, dropSuggested }
+      history: [],
+      lastEvent: `Starting ${ex.name} at ${fmt(ex.startWeight)}, aiming for ${ex.repMin}–${ex.repMax} reps.`,
+    };
+  }
+
+  function ensureSession(s) {
+    return s.session ? s : { ...s, session: { sets: [], currentWeight: s.targetWeight, dropSuggested: false } };
+  }
+
+  function logSet(state, reps, rir) {
+    const s = ensureSession(state);
+    const ex = s.exercise, sess = s.session;
+    if (sess.sets.length >= ex.sets)
+      return { ...s, lastEvent: `All ${ex.sets} planned sets are logged — finish the session.` };
+    const set = { weight: sess.currentWeight, reps, rir: rir ?? null };
+    const sets = [...sess.sets, set];
+    const remaining = ex.sets - sets.length;
+    const dropSuggested = reps < ex.repMin && remaining > 0;
+    const rirTxt = set.rir === null ? '' : `, RIR ${set.rir}`;
+    let msg = `Logged set ${sets.length}: ${fmt(set.weight)} × ${reps}${rirTxt}.`;
+    if (dropSuggested) msg += ` That's below ${ex.repMin} reps — the app suggests dropping to ${fmt(sess.currentWeight - ex.increment)} for the remaining ${remaining} set${remaining > 1 ? 's' : ''}.`;
+    return { ...s, session: { ...sess, sets, dropSuggested }, lastEvent: msg };
+  }
+
+  function finishSession(state) {
+    const s = state, ex = s.exercise, sess = s.session;
+    if (!sess || sess.sets.length === 0)
+      return { ...s, session: null, lastEvent: 'Session ended with no sets — treated as skipped. Nothing changed.' };
+
+    const tw = s.targetWeight;
+    const sets = sess.sets;
+    const dropped = sets.some((x) => x.weight < tw);
+    const complete = sets.length === ex.sets;
+    const atTarget = sets.filter((x) => x.weight === tw);
+    const avgReps = atTarget.length ? avg(atTarget.map((x) => x.reps)) : 0;
+    const allAtTop = !dropped && complete && sets.every((x) => x.reps >= ex.repMax);
+    const lastRir = sets[sets.length - 1].rir;
+    const improved = !dropped && complete && (s.best === null || avgReps > s.best);
+    const e1rm = Math.max(...sets.map((x) => epley(x.weight, x.reps)));
+
+    let next = { ...s, session: null };
+    let outcome, kind, msg;
+
+    if (allAtTop && lastRir !== 0) {
+      next.targetWeight = r2(tw + ex.increment);
+      next.best = null;
+      next.stallCount = 0;
+      kind = 'up'; outcome = `Weight up → ${fmt(next.targetWeight)}`;
+      msg = `Every set reached ${ex.repMax} reps${lastRir === null ? ' (no RIR logged, so reps alone decide)' : ` and the last set had RIR ${lastRir}`} → weight goes up to ${fmt(next.targetWeight)}. Reps reset: aim for ${ex.repMin}+.`;
+    } else {
+      next.stallCount = improved ? 0 : s.stallCount + 1;
+      next.best = improved ? avgReps : s.best;
+      const bestTxt = s.best === null ? 'no previous best at this weight' : `your best of ${r2(s.best)}`;
+      if (allAtTop) {
+        kind = 'hold'; outcome = 'Held (last set at failure)';
+        msg = `Every set reached ${ex.repMax}, but the last set was ground out to failure (RIR 0) → stay at ${fmt(tw)} one more session.`;
+      } else if (dropped) {
+        kind = 'none'; outcome = 'No progress (dropped)';
+        msg = `You dropped weight mid-session → counts as no progress. Target stays ${fmt(tw)} — try again next time.`;
+      } else if (!complete) {
+        kind = 'none'; outcome = 'No progress (sets missing)';
+        msg = `Only ${sets.length} of ${ex.sets} sets logged → counts as no progress.`;
+      } else if (improved) {
+        kind = 'prog'; outcome = 'Progress (more reps)';
+        msg = `Average ${r2(avgReps)} reps/set beats ${bestTxt} → progress. Stay at ${fmt(tw)} and keep adding reps.`;
+      } else {
+        kind = 'none'; outcome = 'No progress';
+        msg = `Average ${r2(avgReps)} reps/set didn't beat ${bestTxt} → no progress.`;
+      }
+      if (allAtTop && improved) msg += ` (Reps still improved, so it still counts as progress.)`;
+      if (next.stallCount > 0 && next.stallCount < 3) msg += ` Stall counter: ${next.stallCount} of 3.`;
+
+      if (next.stallCount >= 3) {
+        const tenPct = roundTo(tw * 0.9, ex.increment);
+        const newW = r2(Math.max(0, Math.min(tenPct, tw - ex.increment)));
+        const pct = Math.round((1 - newW / tw) * 100);
+        next.targetWeight = newW;
+        next.best = null;
+        next.stallCount = 0;
+        kind = 'deload'; outcome = `STALL → deload to ${fmt(newW)}`;
+        msg += ` That's 3 sessions in a row → STALL. Deload: ${fmt(tw)} → ${fmt(newW)} (−${pct}%), aim for ${ex.repMin}+ reps and build back up.`;
+      }
+    }
+
+    next.history = [...s.history, {
+      n: s.history.length + 1, targetWeight: tw, sets, avgReps, e1rm, outcome, kind,
+      stallAfter: next.stallCount,
+    }];
+    next.lastEvent = msg;
+    return next;
+  }
+
+  function reducer(state, action) {
+    switch (action.type) {
+      case 'logSet':
+        return logSet(state, action.reps, action.rir);
+
+      case 'acceptDrop': {
+        const sess = state.session;
+        if (!sess || !sess.dropSuggested) return state;
+        const w = r2(sess.currentWeight - state.exercise.increment);
+        return { ...state, session: { ...sess, currentWeight: w, dropSuggested: false },
+          lastEvent: `Dropped to ${fmt(w)} for the remaining sets. Your target stays ${fmt(state.targetWeight)}.` };
+      }
+
+      case 'ignoreDrop': {
+        const sess = state.session;
+        if (!sess) return state;
+        return { ...state, session: { ...sess, dropSuggested: false },
+          lastEvent: `Kept going at ${fmt(sess.currentWeight)}.` };
+      }
+
+      case 'finishSession':
+        return finishSession(state);
+
+      case 'logSession': {   // shortcut: log every set then finish
+        let s = state;
+        action.sets.forEach((x) => { s = logSet(s, x.reps, x.rir); });
+        return finishSession(s);
+      }
+
+      case 'setSlotSets': {
+        if (state.session) return { ...state, lastEvent: 'Finish the current session before changing the set count.' };
+        return { ...state, exercise: { ...state.exercise, sets: action.sets },
+          lastEvent: `This template slot now does ${action.sets} sets of ${state.exercise.name}. Target and progress are unchanged.` };
+      }
+
+      case 'editRepRange': {
+        if (state.session) return { ...state, lastEvent: 'Finish the current session before editing the rep range.' };
+        const { repMin, repMax } = action;
+        const best = state.best === null ? null : Math.min(Math.max(state.best, repMin), repMax);
+        return { ...state, exercise: { ...state.exercise, repMin, repMax }, best, stallCount: 0,
+          lastEvent: `Rep range changed to ${repMin}–${repMax}. Weight stays ${fmt(state.targetWeight)}; best reps clamped to ${best === null ? '—' : r2(best)}; stall counter reset.` };
+      }
+
+      default:
+        return state;
+    }
+  }
+
+  return { initial, reducer };
+})();
+</script>
+
+<!-- ================================================================
+     THROWAWAY PAGE SHELL
+     ================================================================ -->
+<main>
+  <span class="tag">PROTOTYPE · THROWAWAY</span>
+  <h1>Does the progression logic feel right?</h1>
+  <p class="intro">
+    This lets you log pretend sessions for one exercise and see exactly how the app would change your next target.
+    The rules: <b>double progression</b> (add reps until every set hits the top of the range, then add weight),
+    <b>hold</b> the weight if the last set went to failure (RIR 0), a <b>stall</b> after 3 sessions with no improvement
+    in weight or average reps per set, then a <b>~10% deload</b>. Missing the bottom of the range mid-session offers a
+    one-tap <b>drop</b> that doesn't change the target. Try the scenarios on the right and look for anything that feels wrong.
+  </p>
+
+  <div class="grid">
+    <div>
+      <div class="event" id="event"></div>
+
+      <div class="card">
+        <h2>Current state</h2>
+        <div class="fields" id="fields"></div>
+      </div>
+
+      <div class="card">
+        <h2>Free play</h2>
+        <div class="row">
+          <span class="lbl">Exercise</span>
+          <button data-preset="bench">Bench Press (8–12, +2.5 kg, 60 kg)</button>
+          <button data-preset="lateral">DB Lateral Raise (10–15, +2 kg, 8 kg)</button>
+        </div>
+        <div id="dropBox"></div>
+        <div class="row">
+          <span class="lbl">Reps</span>
+          <span class="stepper">
+            <button id="repsDown">−</button><output id="reps">10</output><button id="repsUp">+</button>
+          </span>
+        </div>
+        <div class="row" id="rirRow"><span class="lbl">RIR</span></div>
+        <div class="row">
+          <span class="lbl"></span>
+          <button class="primary" id="logSet">Log set</button>
+          <button id="finish">Finish session</button>
+        </div>
+        <div class="row" id="setsRow"><span class="lbl">Sets in slot</span></div>
+        <div class="row" id="rangeRow"><span class="lbl">Rep range</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Session history</h2>
+        <div class="scroll" id="history"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Guided scenarios</h2>
+        <div class="tabs" id="tabs"></div>
+        <div id="scenario"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const PRESETS = {
+  bench:   { name: 'Bench Press',      repMin: 8,  repMax: 12, increment: 2.5, sets: 3, startWeight: 60 },
+  lateral: { name: 'DB Lateral Raise', repMin: 10, repMax: 15, increment: 2,   sets: 3, startWeight: 8 },
+};
+
+const sess = (reps, lastRir) => ({
+  label: `Session: ${reps.join(' / ')}${lastRir === undefined ? '' : ` (last set RIR ${lastRir})`}`,
+  action: { type: 'logSession', sets: reps.map((r, i) => ({ reps: r, rir: i === reps.length - 1 && lastRir !== undefined ? lastRir : null })) },
+});
+const set = (reps) => ({ label: `Log set: ${reps} reps`, action: { type: 'logSet', reps, rir: null } });
+
+const SCENARIOS = [
+  { title: 'Happy path', preset: 'bench',
+    desc: 'You get a bit stronger every week. No RIR logged.',
+    watch: 'The weight only goes up once <b>all three</b> sets reach 12. Then reps reset to 8 at 62.5 kg, and the first session at the new weight sets a fresh "best".',
+    steps: [sess([10, 9, 8]), sess([11, 10, 9]), sess([12, 11, 10]), sess([12, 12, 12]), sess([9, 8, 8])] },
+
+  { title: 'Ground to failure', preset: 'bench',
+    desc: 'You hit 12/12/12, but the last set was an all-out grind.',
+    watch: 'With RIR 0 on the last set, the weight is <b>held</b> one more session. Repeat it with RIR 1 and it goes up.',
+    steps: [sess([11, 11, 10]), sess([12, 12, 12], 0), sess([12, 12, 12], 1)] },
+
+  { title: 'Always grinding', preset: 'bench',
+    desc: 'You keep hitting 12/12/12, but always to failure.',
+    watch: 'Each hold matches but doesn\'t beat your best, so the stall counter climbs. After 3 sessions you get <b>deloaded</b>, even though you hit every rep. <b>Is that right?</b> Or should repeated top-of-range sessions eventually go up anyway?',
+    steps: [sess([11, 11, 10]), sess([12, 12, 12], 0), sess([12, 12, 12], 0), sess([12, 12, 12], 0), sess([12, 12, 12], 0)] },
+
+  { title: 'Three bad weeks', preset: 'bench',
+    desc: 'A good session, then three where you can\'t beat it (bad sleep, stress).',
+    watch: 'The stall counter goes 1 → 2 → 3, then a deload from 60 kg to 55 kg (−8%, rounded to the 2.5 kg increment). Then you rebuild from 8 reps.',
+    steps: [sess([10, 9, 8]), sess([9, 9, 8]), sess([10, 8, 8]), sess([9, 9, 8]), sess([9, 8, 8])] },
+
+  { title: 'Mid-session drop', preset: 'bench',
+    desc: 'Set 2 goes badly, so you take the suggested drop for set 3.',
+    watch: 'After 6 reps, the app offers 57.5 kg. Finishing counts as <b>no progress</b>, but the target <b>stays 60 kg</b> for next time.',
+    steps: [set(9), set(6), { label: 'Accept the drop', action: { type: 'acceptDrop' } }, set(8),
+            { label: 'Finish session', action: { type: 'finishSession' } }, sess([10, 9, 8])] },
+
+  { title: 'Fewer sets today', preset: 'bench',
+    desc: 'Bench appears in Full Body A (3 sets) and C (2 sets). Progress is judged on average reps per set.',
+    watch: 'Going 10/9/8 → 10/9 is progress (avg 9 → 9.5), even though total reps fell. But going back to 3 sets with 10/9/9 (avg 9.33) counts as <b>no progress</b>, because the 3rd set drags the average down. <b>Does that feel fair?</b>',
+    steps: [sess([10, 9, 8]), { label: 'Switch slot to 2 sets (Full Body C)', action: { type: 'setSlotSets', sets: 2 } },
+            sess([10, 9]), { label: 'Switch slot to 3 sets (Full Body A)', action: { type: 'setSlotSets', sets: 3 } },
+            sess([10, 9, 9])] },
+
+  { title: 'Small dumbbells', preset: 'lateral',
+    desc: 'Lateral raises at 8 kg with 2 kg dumbbell jumps. You stall.',
+    watch: '10% of 8 kg rounds back to 8 kg, so the deload is forced down one full step to <b>6 kg (−25%)</b>. <b>Too harsh?</b> The alternative is skipping the weight cut and just resetting reps.',
+    steps: [sess([12, 11, 10]), sess([11, 11, 10]), sess([11, 10, 10]), sess([11, 11, 10])] },
+
+  { title: 'Change rep range', preset: 'bench',
+    desc: 'You\'re doing 60 kg for 12/11/10, then switch Bench to a heavier 5–8 range.',
+    watch: 'The weight stays at 60 kg, which is now far too light. It climbs only 2.5 kg per session, so it takes several sessions to reach a weight that\'s hard for 5–8. <b>Would you rather enter a new weight when changing the range?</b>',
+    steps: [sess([12, 11, 10]), { label: 'Change range to 5–8', action: { type: 'editRepRange', repMin: 5, repMax: 8 } },
+            sess([8, 8, 8]), sess([8, 8, 8]), sess([8, 8, 8])] },
+];
+
+// ---------- page state ----------
+let state, prevState = null, activeScenario = 0, scenarioStep = 0, uiReps = 10, uiRir = null;
+
+function dispatch(action) {
+  prevState = state;
+  state = Progression.reducer(state, action);
+  render();
+}
+function reset(presetKey) {
+  prevState = null;
+  state = Progression.initial(PRESETS[presetKey]);
+  uiReps = PRESETS[presetKey].repMin + 1;
+}
+
+// ---------- rendering ----------
+const $ = (id) => document.getElementById(id);
+const kg = (n) => `${Math.round(n * 100) / 100} kg`;
+
+function fieldDefs(s) {
+  const ex = s.exercise, se = s.session;
+  return [
+    ['Exercise', ex.name, 'wide'],
+    ['Target weight', kg(s.targetWeight)],
+    ['Rep range', `${ex.repMin}–${ex.repMax}`],
+    ['Best avg reps/set at this weight', s.best === null ? '— (none yet)' : Math.round(s.best * 100) / 100],
+    ['Sets in this slot', ex.sets],
+    ['Stall counter', `<span class="dots">${[0, 1, 2].map((i) => `<span class="${i < s.stallCount ? 'on' : ''}"></span>`).join('')}</span> ${s.stallCount} of 3`],
+    ['Increment', kg(ex.increment)],
+    ['Session in progress', se
+      ? `${se.sets.length}/${ex.sets} sets · ${se.sets.map((x) => `${kg(x.weight)}×${x.reps}${x.rir === null ? '' : ` @${x.rir}`}`).join(', ') || 'none yet'} · now lifting ${kg(se.currentWeight)}`
+      : 'No session running', 'wide'],
+  ];
+}
+
+function render() {
+  $('event').innerHTML = `<b>What just happened</b>${state.lastEvent}`;
+
+  const now = fieldDefs(state), before = prevState ? fieldDefs(prevState) : null;
+  $('fields').innerHTML = now.map(([k, v, cls], i) => {
+    const changed = before && String(before[i][1]) !== String(v);
+    return `<div class="field ${cls || ''} ${changed ? 'changed' : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  }).join('');
+
+  const se = state.session;
+  $('dropBox').innerHTML = se && se.dropSuggested
+    ? `<div class="drop">Below ${state.exercise.repMin} reps. Drop to ${kg(se.currentWeight - state.exercise.increment)} for the remaining sets?
+       <div class="row" style="margin:8px 0 0"><button class="primary" onclick="dispatch({type:'acceptDrop'})">Drop weight</button>
+       <button onclick="dispatch({type:'ignoreDrop'})">Keep going</button></div></div>` : '';
+
+  $('reps').textContent = uiReps;
+  $('rirRow').innerHTML = '<span class="lbl">RIR</span>' + [null, 0, 1, 2, 3, 4].map((v) =>
+    `<button class="${uiRir === v ? 'sel' : ''}" onclick="uiRir=${v};render()">${v === null ? 'not logged' : v === 4 ? '4+' : v}</button>`).join('');
+  $('setsRow').innerHTML = '<span class="lbl">Sets in slot</span>' + [2, 3, 4].map((n) =>
+    `<button class="${state.exercise.sets === n ? 'sel' : ''}" onclick="dispatch({type:'setSlotSets',sets:${n}})">${n}</button>`).join('');
+  $('rangeRow').innerHTML = '<span class="lbl">Rep range</span>' + [[5, 8], [8, 12], [10, 15]].map(([a, b]) =>
+    `<button class="${state.exercise.repMin === a && state.exercise.repMax === b ? 'sel' : ''}" onclick="dispatch({type:'editRepRange',repMin:${a},repMax:${b}})">${a}–${b}</button>`).join('');
+  $('logSet').disabled = !!(se && se.sets.length >= state.exercise.sets);
+
+  $('history').innerHTML = state.history.length === 0 ? '<p class="muted">No sessions yet.</p>' :
+    `<table><thead><tr><th>#</th><th>Target</th><th>Sets</th><th>Avg</th><th>Est. 1RM</th><th>Result</th></tr></thead><tbody>` +
+    [...state.history].reverse().map((h) => `<tr><td>${h.n}</td><td>${kg(h.targetWeight)}</td>
+      <td>${h.sets.map((x) => `${x.weight !== h.targetWeight ? `<i>${kg(x.weight)}</i>×` : ''}${x.reps}${x.rir === null ? '' : `@${x.rir}`}`).join(' / ')}</td>
+      <td>${Math.round(h.avgReps * 100) / 100}</td><td>${kg(Math.round(h.e1rm * 10) / 10)}</td>
+      <td class="o-${h.kind}">${h.outcome}</td></tr>`).join('') + '</tbody></table>';
+
+  renderScenario();
+}
+
+function renderScenario() {
+  $('tabs').innerHTML = SCENARIOS.map((sc, i) =>
+    `<button class="${i === activeScenario ? 'sel' : ''}" onclick="startScenario(${i})">${sc.title}</button>`).join('');
+  const sc = SCENARIOS[activeScenario];
+  $('scenario').innerHTML = `<p>${sc.desc}</p>
+    <ol class="steps">${sc.steps.map((st, i) => `<li class="${i < scenarioStep ? 'done' : ''}">
+      <span class="n">${i < scenarioStep ? '✓' : i + 1}</span>
+      <button ${i === scenarioStep ? 'class="primary"' : 'disabled'} onclick="runStep(${i})">${st.label}</button></li>`).join('')}</ol>
+    ${scenarioStep >= sc.steps.length ? '<p class="muted">Scenario complete.</p>' : ''}
+    <div class="watch"><b>Watch for:</b> ${sc.watch}</div>
+    <div class="row" style="margin-top:12px"><button onclick="startScenario(${activeScenario})">Restart scenario</button></div>`;
+}
+
+function startScenario(i) {
+  activeScenario = i; scenarioStep = 0;
+  reset(SCENARIOS[i].preset);
+  state = { ...state, lastEvent: `Scenario “${SCENARIOS[i].title}” — ${state.lastEvent}` };
+  render();
+}
+function runStep(i) {
+  if (i !== scenarioStep) return;
+  scenarioStep++;
+  dispatch(SCENARIOS[activeScenario].steps[i].action);
+}
+
+// ---------- free-play wiring ----------
+$('repsDown').onclick = () => { uiReps = Math.max(0, uiReps - 1); render(); };
+$('repsUp').onclick = () => { uiReps++; render(); };
+$('logSet').onclick = () => dispatch({ type: 'logSet', reps: uiReps, rir: uiRir });
+$('finish').onclick = () => dispatch({ type: 'finishSession' });
+document.querySelectorAll('[data-preset]').forEach((b) => b.onclick = () => { reset(b.dataset.preset); render(); });
+
+startScenario(0);
+</script>
+</body>
+</html>
