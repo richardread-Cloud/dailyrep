@@ -172,7 +172,7 @@ export function SessionScreen({ id, go }: { id: string; go: Go }) {
 
       {howTo && <HowToSheet id={howTo} onClose={() => setHowTo(null)} />}
       {swapping && currentId && (
-        <ExercisePicker title="Swap for today" startGroup={libraryExercise(currentId)?.group}
+        <ExercisePicker title="Swap for today" similarTo={currentId}
           exclude={session.plan.map((p) => p.exerciseId)}
           onClose={() => setSwapping(false)}
           onPick={async (exId) => { await swapSlot(id, cur, exId); setSwapping(false); }} />
@@ -379,10 +379,12 @@ function Focus(p: {
           <h1 className="ex-name">{lib.name}</h1>
           {done.length === 0 && <button className="link" onClick={p.onSwap}>Swap exercise</button>}
         </div>
-        <button className="demo-thumb" onClick={() => p.onHowTo(slot.exerciseId)} aria-label={`How to do ${lib.name}`}>
-          <Demo id={slot.exerciseId} />
-          <span className="demo-thumb-tag">How to</span>
-        </button>
+        {lib.custom ? <Demo id={slot.exerciseId} className="demo-thumb" /> : (
+          <button className="demo-thumb" onClick={() => p.onHowTo(slot.exerciseId)} aria-label={`How to do ${lib.name}`}>
+            <Demo id={slot.exerciseId} />
+            <span className="demo-thumb-tag">How to</span>
+          </button>
+        )}
       </div>
       {body}
       <nav className="s-nav">

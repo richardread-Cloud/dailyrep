@@ -11,6 +11,8 @@ import { libraryExercise } from '../lib/library';
 export function TemplateScreen({ id, go }: { id: string; go: Go }) {
   const t = useLiveQuery(() => db.templates.get(id), [id]);
   const [picking, setPicking] = useState(false);
+  /** Index of the Slot whose Exercise is being replaced. */
+  const [swapping, setSwapping] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   if (t === undefined) return null;
 
@@ -52,6 +54,7 @@ export function TemplateScreen({ id, go }: { id: string; go: Go }) {
                   <div className="row" style={{ flexWrap: 'nowrap' }}>
                     <button className="btn small" disabled={i === 0} aria-label="Move up" onClick={() => move(i, -1)}>↑</button>
                     <button className="btn small" disabled={i === t.slots.length - 1} aria-label="Move down" onClick={() => move(i, 1)}>↓</button>
+                    <button className="btn small" aria-label={`Swap ${lib?.name}`} onClick={() => setSwapping(i)}>Swap</button>
                     <button className="btn small danger" aria-label={`Remove ${lib?.name}`} onClick={() => setSlots(t.slots.filter((_, k) => k !== i))}>Remove</button>
                   </div>
                 </div>
@@ -77,6 +80,11 @@ export function TemplateScreen({ id, go }: { id: string; go: Go }) {
       {picking && (
         <ExercisePicker title="Add exercise" exclude={t.slots.map((s) => s.exerciseId)} onClose={() => setPicking(false)}
           onPick={async (exId) => { await setSlots([...t.slots, { exerciseId: exId, sets: 3 }]); setPicking(false); }} />
+      )}
+      {swapping !== null && t.slots[swapping] && (
+        <ExercisePicker title={`Replace ${libraryExercise(t.slots[swapping].exerciseId)?.name ?? 'exercise'}`} similarTo={t.slots[swapping].exerciseId}
+          exclude={t.slots.map((s) => s.exerciseId)} onClose={() => setSwapping(null)}
+          onPick={async (exId) => { await setSlots(t.slots.map((x, k) => (k === swapping ? { ...x, exerciseId: exId } : x))); setSwapping(null); }} />
       )}
     </main>
   );

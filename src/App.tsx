@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { db } from './data/db';
 import { getSettings } from './data/repo';
+import { registerCustomExercises } from './lib/library';
 import { ExerciseScreen } from './screens/ExerciseScreen';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -28,6 +29,9 @@ export function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [dbError, setDbError] = useState<string | null>(null);
   const settings = useLiveQuery(() => getSettings(), []);
+  const customs = useLiveQuery(() => db.customExercises.toArray(), []);
+  // Screens look Exercises up synchronously, so the Custom ones are registered before anything renders.
+  if (customs) registerCustomExercises(customs);
 
   useEffect(() => {
     db.open().catch((e: unknown) => setDbError(e instanceof Error ? e.message : String(e)));
@@ -44,7 +48,7 @@ export function App() {
       </div>
     );
   }
-  if (!settings) return null;
+  if (!settings || !customs) return null;
   if (!settings.onboarded) return <Onboarding go={go} unit={settings.unit} />;
 
   switch (route.name) {
@@ -54,7 +58,7 @@ export function App() {
     case 'program': return <ProgramScreen go={go} />;
     case 'template': return <TemplateScreen id={route.id} go={go} />;
     case 'progress': return <ProgressScreen go={go} />;
-    case 'exercise': return <ExerciseScreen id={route.id} back={route.from} go={go} />;
+    case 'exercise': return <ExerciseScreen key={route.id} id={route.id} back={route.from} go={go} />;
     case 'settings': return <SettingsScreen go={go} />;
   }
 }

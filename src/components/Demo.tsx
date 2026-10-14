@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { figSVG, libraryExercise } from '../lib/library';
+import { figSVG, hasDemo, libraryExercise } from '../lib/library';
 
-/** An exercise Demo figure. `still` skips the animation (used in long lists). */
+const initials = (name: string) => name.split(/[\s-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+
+/** An exercise Demo figure. `still` skips the animation (used in long lists). A Custom Exercise shows its initials instead. */
 export function Demo({ id, still = false, className }: { id: string; still?: boolean; className?: string }) {
   const lib = libraryExercise(id);
   if (!lib) return null;
+  if (!hasDemo(id)) return <span className={`${className ?? ''} demo-none`} aria-hidden="true">{initials(lib.name)}</span>;
   let html = figSVG(id, `Animation of ${lib.name}`);
   if (still) html = html.replace('<svg ', '<svg data-still="" ');
   return <span className={className} style={{ display: 'block' }} dangerouslySetInnerHTML={{ __html: html }} />;
@@ -29,7 +32,7 @@ export function HowToSheet({ id, onClose }: { id: string; onClose: () => void })
     return () => { el.removeEventListener('figstage', on); window.removeEventListener('keydown', key); };
   }, [onClose]);
 
-  if (!lib) return null;
+  if (!lib || lib.custom) return null;
   return (
     <div className="sheet" onClick={onClose}>
       <div className="sheet-card" role="dialog" aria-label={`How to do ${lib.name}`} onClick={(e) => e.stopPropagation()}>

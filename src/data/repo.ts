@@ -1,8 +1,10 @@
 import { evaluate, withRepRange, withTarget, type ProgressState } from '../domain/progression';
 import { STARTER_PROGRAM } from '../domain/starterProgram';
 import { defaultIncrement, fmtWeight, type Unit } from '../domain/units';
-import { libraryExercise } from '../lib/library';
-import { db, type ExerciseResult, type ExerciseState, type LoggedSet, type Session, type SessionUi, type Settings, type Slot, type Template } from './db';
+import { customExercise, libraryExercise, registerCustomExercise, type CustomDef, type LibraryExercise } from '../lib/library';
+import {
+  db, type CustomExercise, type ExerciseResult, type ExerciseState, type LoggedSet, type Session, type SessionUi, type Settings, type Slot, type Template,
+} from './db';
 
 export const uid = (): string =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -23,9 +25,16 @@ export async function updateSettings(patch: Partial<Omit<Settings, 'id'>>): Prom
 
 // ---------- exercises ----------
 
-function newExerciseState(id: string, unit: Unit): ExerciseState {
+/** A Built-in Exercise, or one of the Lifter's Custom Exercises read straight from the database. */
+async function findExercise(id: string): Promise<LibraryExercise | undefined> {
   const lib = libraryExercise(id);
-  if (!lib) throw new Error(`Unknown exercise: ${id}`);
+  if (lib) return lib;
+  const custom = await db.customExercises.get(id);
+  return custom && customExercise(custom);
+}
+
+function newExerciseState(lib: LibraryExercise, unit: Unit): ExerciseState {
+  const id = lib.id;
   return {
     id,
     repMin: lib.min,
@@ -43,8 +52,36 @@ function newExerciseState(id: string, unit: Unit): ExerciseState {
 export async function ensureExercises(ids: string[]): Promise<void> {
   const { unit } = await getSettings();
   const existing = new Set((await db.exercises.bulkGet(ids)).filter(Boolean).map((e) => e!.id));
-  const fresh = [...new Set(ids)].filter((id) => !existing.has(id)).map((id) => newExerciseState(id, unit));
+  const fresh: ExerciseState[] = [];
+  for (const id of new Set(ids)) {
+    if (existing.has(id)) continue;
+    const lib = await findExercise(id);
+    if (!lib) throw new Error(`Unknown exercise: ${id}`);
+    fresh.push(newExerciseState(lib, unit));
+  }
   if (fresh.length) await db.exercises.bulkPut(fresh);
+}
+
+/** Make a Custom Exercise and the Lifter's state for it. Returns its id. */
+export async function createCustomExercise(def: Omit<CustomDef, 'id'>): Promise<string> {
+  const name = def.name.trim();
+  if (!name) throw new Error('Give the exercise a name.');
+  const id = `custom-${uid()}`;
+  const row: CustomExercise = { ...def, name, id, updatedAt: Date.now() };
+  await db.customExercises.put(row);
+  registerCustomExercise(row);
+  await ensureExercises([id]);
+  return id;
+}
+
+/** Rename or regroup a Custom Exercise. Its settings, target and history stay as they are. */
+export async function updateCustomExercise(id: string, patch: Partial<Pick<CustomExercise, 'name' | 'group' | 'perSide'>>): Promise<void> {
+  const cur = await db.customExercises.get(id);
+  if (!cur) return;
+  const name = patch.name?.trim();
+  const row: CustomExercise = { ...cur, ...patch, name: name || cur.name, updatedAt: Date.now() };
+  await db.customExercises.put(row);
+  registerCustomExercise(row);
 }
 
 export async function setTarget(exerciseId: string, weight: number): Promise<void> {
@@ -162,7 +199,7 @@ export async function swapSlot(sessionId: string, index: number, exerciseId: str
 
 /** Finish a Session: run Double Progression for every Exercise with logged sets and advance the Cycle. */
 export async function finishSession(sessionId: string): Promise<ExerciseResult[]> {
-  return db.transaction('rw', [db.sessions, db.sets, db.exercises, db.settings, db.templates], async () => {
+  return db.transaction('rw', [db.sessions, db.sets, db.exercises, db.settings, db.templates, db.customExercises], async () => {
     const s = await db.sessions.get(sessionId);
     if (!s) throw new Error('Session not found');
     const { unit } = await getSettings();
@@ -173,7 +210,7 @@ export async function finishSession(sessionId: string): Promise<ExerciseResult[]
       seen.add(slot.exerciseId);
       const sets = await sessionSets(sessionId, slot.exerciseId);
       const ex = await db.exercises.get(slot.exerciseId);
-      const lib = libraryExercise(slot.exerciseId);
+      const lib = await findExercise(slot.exerciseId);
       if (!sets.length || !ex || !lib) continue;
       const planned = s.plan.filter((p) => p.exerciseId === slot.exerciseId).reduce((a, p) => a + p.sets, 0);
       const state: ProgressState = { targetWeight: ex.targetWeight ?? sets[0].weight, best: ex.best, stallCount: ex.stallCount };
@@ -246,31 +283,36 @@ export interface Backup {
   templates: Template[];
   sessions: Session[];
   sets: LoggedSet[];
+  /** Absent in backups made before Custom Exercises existed. */
+  customExercises?: CustomExercise[];
 }
+
+const allTables = () => [db.settings, db.exercises, db.templates, db.sessions, db.sets, db.customExercises];
 
 export async function exportAll(): Promise<Backup> {
   return {
     app: 'DailyRep', version: 1, exportedAt: new Date().toISOString(),
     settings: await db.settings.toArray(), exercises: await db.exercises.toArray(), templates: await db.templates.toArray(),
-    sessions: await db.sessions.toArray(), sets: await db.sets.toArray(),
+    sessions: await db.sessions.toArray(), sets: await db.sets.toArray(), customExercises: await db.customExercises.toArray(),
   };
 }
 
 export async function importAll(text: string): Promise<void> {
   const b = JSON.parse(text) as Backup;
   if (b?.app !== 'DailyRep' || b.version !== 1) throw new Error("That isn't a DailyRep backup file.");
-  await db.transaction('rw', [db.settings, db.exercises, db.templates, db.sessions, db.sets], async () => {
-    await Promise.all([db.settings.clear(), db.exercises.clear(), db.templates.clear(), db.sessions.clear(), db.sets.clear()]);
+  await db.transaction('rw', allTables(), async () => {
+    await Promise.all(allTables().map((t) => t.clear()));
     await db.settings.bulkPut(b.settings);
     await db.exercises.bulkPut(b.exercises);
     await db.templates.bulkPut(b.templates);
     await db.sessions.bulkPut(b.sessions);
     await db.sets.bulkPut(b.sets);
+    await db.customExercises.bulkPut(b.customExercises ?? []);
   });
 }
 
 export async function eraseAll(): Promise<void> {
-  await db.transaction('rw', [db.settings, db.exercises, db.templates, db.sessions, db.sets], async () => {
-    await Promise.all([db.settings.clear(), db.exercises.clear(), db.templates.clear(), db.sessions.clear(), db.sets.clear()]);
+  await db.transaction('rw', allTables(), async () => {
+    await Promise.all(allTables().map((t) => t.clear()));
   });
 }

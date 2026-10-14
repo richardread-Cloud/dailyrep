@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { OutcomeKind } from '../domain/progression';
-import type { Unit } from '../domain/units';
+import type { Equipment, Unit } from '../domain/units';
+import type { Group } from '../lib/library';
 
 // Everything is stored on the device first (docs/adr/0002). Ids are random UUIDs so records can sync later.
 
@@ -23,6 +24,17 @@ export interface ExerciseState {
   targetWeight: number | null;
   best: number | null;
   stallCount: number;
+  updatedAt: number;
+}
+
+/** An Exercise the Lifter made themselves. It has no Demo; its defaults come from its equipment. */
+export interface CustomExercise {
+  id: string;
+  name: string;
+  group: Group;
+  equipment: Equipment;
+  perSide?: boolean;
+  repsOnly?: boolean;
   updatedAt: number;
 }
 
@@ -96,6 +108,7 @@ export class DailyRepDB extends Dexie {
   templates!: Table<Template, string>;
   sessions!: Table<Session, string>;
   sets!: Table<LoggedSet, string>;
+  customExercises!: Table<CustomExercise, string>;
 
   constructor(name = 'dailyrep') {
     super(name);
@@ -106,6 +119,7 @@ export class DailyRepDB extends Dexie {
       sessions: 'id, startedAt, finishedAt',
       sets: 'id, sessionId, exerciseId, [exerciseId+loggedAt]',
     });
+    this.version(2).stores({ customExercises: 'id' });
   }
 }
 

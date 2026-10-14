@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
-  acceptStarterProgram, activeSession, cycle, exerciseHistory, exportAll, finishSession, getSettings, importAll,
-  lastSessionSets, logSet, setTarget, startSession, swapSlot, updateExerciseSettings,
+  acceptStarterProgram, activeSession, createCustomExercise, cycle, exerciseHistory, exportAll, finishSession, getSettings, importAll,
+  lastSessionSets, logSet, saveTemplate, setTarget, startSession, swapSlot, updateCustomExercise, updateExerciseSettings,
 } from './repo';
+import { libraryExercise, registerCustomExercises } from '../lib/library';
 
 beforeEach(async () => {
   await db.delete();
   await db.open();
+  registerCustomExercises([]);
 });
 
 describe('a full session', () => {
@@ -56,6 +58,46 @@ describe('a full session', () => {
     await finishSession(sid);
     expect((await db.exercises.get('db-bench-press'))?.targetWeight).toBe(26);
     expect((await db.exercises.get('bench-press'))?.targetWeight).toBeNull();
+  });
+});
+
+describe('custom exercises', () => {
+  it('starts from equipment defaults, can be trained and progresses like any other', async () => {
+    await acceptStarterProgram();
+    const id = await createCustomExercise({ name: '  Hack Squat ', group: 'Legs', equipment: 'machine' });
+    expect(libraryExercise(id)).toMatchObject({ name: 'Hack Squat', custom: true, equipment: 'machine' });
+    expect(await db.exercises.get(id)).toMatchObject({ repMin: 10, repMax: 15, increment: 5, targetWeight: null });
+
+    const [a] = await cycle();
+    await saveTemplate({ ...a, slots: [{ exerciseId: id, sets: 2 }] });
+    await setTarget(id, 100);
+    // Read from the database, not the in-memory registry, so finishing works even before the app has registered it.
+    registerCustomExercises([]);
+    const sid = await startSession(a.id);
+    for (const reps of [15, 15]) await logSet(sid, id, 100, reps, null);
+    expect((await finishSession(sid))[0]).toMatchObject({ exerciseId: id, kind: 'up', nextWeight: 105 });
+  });
+
+  it('a reps-only bodyweight exercise never adds weight', async () => {
+    const id = await createCustomExercise({ name: 'Bear Crawl', group: 'Core', equipment: 'bodyweight', repsOnly: true });
+    expect(libraryExercise(id)).toMatchObject({ repsOnly: true, inc: null });
+    expect(await db.exercises.get(id)).toMatchObject({ increment: 0, targetWeight: 0 });
+  });
+
+  it('renaming keeps its settings, and it survives a backup', async () => {
+    const id = await createCustomExercise({ name: 'Hack Sqat', group: 'Legs', equipment: 'machine' });
+    await setTarget(id, 90);
+    await updateCustomExercise(id, { name: 'Hack Squat', group: 'Legs' });
+    expect(libraryExercise(id)?.name).toBe('Hack Squat');
+    const backup = JSON.stringify(await exportAll());
+    await db.delete(); await db.open();
+    await importAll(backup);
+    expect(await db.customExercises.get(id)).toMatchObject({ name: 'Hack Squat' });
+    expect((await db.exercises.get(id))?.targetWeight).toBe(90);
+  });
+
+  it('rejects a blank name', async () => {
+    await expect(createCustomExercise({ name: '  ', group: 'Arms', equipment: 'cable' })).rejects.toThrow('name');
   });
 });
 

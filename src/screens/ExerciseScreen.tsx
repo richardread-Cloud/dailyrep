@@ -1,12 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Go, Route } from '../App';
+import { CustomExerciseForm, equipmentLabel } from '../components/CustomExerciseForm';
 import { Demo, HowToSheet } from '../components/Demo';
+import { ExercisePicker } from '../components/ExercisePicker';
 import { ProgressChart } from '../components/ProgressChart';
 import { db } from '../data/db';
-import { ensureExercises, exerciseHistory, getSettings, setTarget, updateExerciseSettings } from '../data/repo';
+import { ensureExercises, exerciseHistory, getSettings, setTarget, updateCustomExercise, updateExerciseSettings } from '../data/repo';
 import { fmtNum, fmtWeight } from '../domain/units';
-import { libraryExercise } from '../lib/library';
+import { alternatives, libraryExercise } from '../lib/library';
 
 const fmtRest = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
@@ -17,6 +19,10 @@ export function ExerciseScreen({ id, back, go }: { id: string; back: Route; go: 
   useEffect(() => { void ensureExercises([id]); }, [id]);
   const data = useLiveQuery(async () => ({ ex: await db.exercises.get(id), history: await exerciseHistory(id), unit: (await getSettings()).unit }), [id]);
   const [howTo, setHowTo] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
+  const alts = useMemo(() => alternatives(id), [id, lib]);
+  const openAlt = (altId: string) => go({ name: 'exercise', id: altId, from: { name: 'exercise', id, from: back } });
   const [target, setTargetText] = useState<string | null>(null);
   if (!lib || !data?.ex) return null;
   const { ex, history, unit } = data;
@@ -33,13 +39,17 @@ export function ExerciseScreen({ id, back, go }: { id: string; back: Route; go: 
       <button className="back" style={{ alignSelf: 'start' }} onClick={() => go(back)}>‹ Back</button>
       <div className="ex-head">
         <div>
-          <span className="eyebrow">{lib.group}</span>
+          <span className="eyebrow">{lib.group}{lib.custom ? ' · your exercise' : ''}</span>
           <h1 className="ex-name">{lib.name}</h1>
-          <button className="link" onClick={() => setHowTo(true)}>How to do it</button>
+          {lib.custom
+            ? <button className="link" onClick={() => setEditing(true)}>Edit name and group</button>
+            : <button className="link" onClick={() => setHowTo(true)}>How to do it</button>}
         </div>
-        <button className="demo-thumb" onClick={() => setHowTo(true)} aria-label={`How to do ${lib.name}`}>
-          <Demo id={id} /><span className="demo-thumb-tag">How to</span>
-        </button>
+        {lib.custom ? <Demo id={id} className="demo-thumb" /> : (
+          <button className="demo-thumb" onClick={() => setHowTo(true)} aria-label={`How to do ${lib.name}`}>
+            <Demo id={id} /><span className="demo-thumb-tag">How to</span>
+          </button>
+        )}
       </div>
 
       <section className="card stack">
@@ -105,7 +115,40 @@ export function ExerciseScreen({ id, back, go }: { id: string; back: Route; go: 
         )}
       </section>
 
+      <section className="stack">
+        <div>
+          <h2 className="subtitle">Alternatives</h2>
+          <p className="small muted">{alts.length ? 'Work the same muscles, for when the equipment is busy or missing.' : 'Nothing else in the library works the same muscles.'}</p>
+        </div>
+        {alts.length > 0 && (
+          <div className="list">
+            {alts.slice(0, 5).map((a) => (
+              <button key={a.id} className="list-row" onClick={() => openAlt(a.id)}>
+                <Demo id={a.id} still className="demo-mini" />
+                <span className="grow">
+                  <span className="name">{a.name}</span>
+                  <span className="small muted" style={{ display: 'block' }}>{equipmentLabel(a)}</span>
+                </span>
+                <span className="chev" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {alts.length > 5 && <button className="btn" onClick={() => setBrowsing(true)}>All {alts.length} alternatives</button>}
+      </section>
+
+      {browsing && <ExercisePicker title="Alternatives" similarTo={id} allowCreate={false} onClose={() => setBrowsing(false)} onPick={openAlt} />}
       {howTo && <HowToSheet id={id} onClose={() => setHowTo(false)} />}
+      {editing && (
+        <div className="sheet" onClick={() => setEditing(false)}>
+          <div className="sheet-card" role="dialog" aria-label={`Edit ${lib.name}`} onClick={(e) => e.stopPropagation()}>
+            <h2>Edit exercise</h2>
+            <CustomExerciseForm editing initial={{ name: lib.name, group: lib.group, equipment: lib.equipment, perSide: lib.perSide, repsOnly: lib.repsOnly }}
+              submitLabel="Save" onCancel={() => setEditing(false)}
+              onSubmit={async (v) => { await updateCustomExercise(id, { name: v.name, group: v.group, perSide: v.perSide }); setEditing(false); }} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }
