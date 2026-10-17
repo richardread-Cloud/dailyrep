@@ -1,6 +1,6 @@
 import { evaluate, withRepRange, withTarget, type ProgressState } from '../domain/progression';
 import { STARTER_PROGRAM } from '../domain/starterProgram';
-import { defaultIncrement, fmtWeight, type Unit } from '../domain/units';
+import { defaultIncrement, fmtNum, fmtWeight, type Unit } from '../domain/units';
 import { customExercise, libraryExercise, registerCustomExercise, type CustomDef, type LibraryExercise } from '../lib/library';
 import {
   db, type CustomExercise, type ExerciseResult, type ExerciseState, type LoggedSet, type Session, type SessionUi, type Settings, type Slot, type Template,
@@ -270,6 +270,76 @@ export async function exerciseHistory(exerciseId: string): Promise<HistoryPoint[
       };
     })
     .sort((a, b) => a.date - b.date);
+}
+
+// ---------- training report (plain text to paste into an AI assistant for analysis) ----------
+
+const day = (t: number) => new Date(t).toISOString().slice(0, 10);
+
+/** Every finished Session, plus current Targets and the Cycle, as Markdown a person can paste into a chat. */
+export async function trainingReport(): Promise<string> {
+  const { unit } = await getSettings();
+  const sessions = (await db.sessions.filter((s) => s.finishedAt !== null).toArray()).sort((a, b) => a.startedAt - b.startedAt);
+  const sets = await db.sets.toArray();
+  const names = new Map<string, LibraryExercise | undefined>();
+  const ex = async (id: string) => {
+    if (!names.has(id)) names.set(id, await findExercise(id));
+    return names.get(id);
+  };
+  const name = async (id: string) => (await ex(id))?.name ?? id;
+  const w = async (id: string, kg: number) => {
+    const e = await ex(id);
+    return e?.repsOnly ? 'bodyweight' : fmtWeight(kg, unit, e?.equipment);
+  };
+
+  const out: string[] = [
+    '# My DailyRep training log',
+    '',
+    'I track my strength training in DailyRep, which uses double progression: each exercise has a target weight and a rep range;',
+    'when every planned set reaches the top of the range the weight goes up by the increment, and after 3 sessions with no progress it deloads.',
+    'Please analyse my progress per exercise, my current working weights, any stalls or imbalances, and suggest what to focus on next.',
+    '',
+    `Exported ${day(Date.now())}. Weights are in ${unit}. "RIR" = reps in reserve. "per side" = weight of one dumbbell or one side.`,
+    `${sessions.length} finished session${sessions.length === 1 ? '' : 's'}${sessions.length ? `, ${day(sessions[0].startedAt)} to ${day(sessions.at(-1)!.startedAt)}` : ''}.`,
+    '',
+    '## Current working weights',
+    '',
+    '| Exercise | Group | Target | Rep range | Increment | Sessions without progress |',
+    '|---|---|---|---|---|---|',
+  ];
+  const states = await db.exercises.toArray();
+  const rows: [string, string][] = [];
+  for (const s of states) {
+    const e = await ex(s.id);
+    const target = s.targetWeight === null ? 'not set' : await w(s.id, s.targetWeight);
+    const inc = e?.repsOnly ? '—' : `${fmtNum(s.increment)} ${unit}`;
+    rows.push([e?.group ?? '', `| ${e?.name ?? s.id}${e?.perSide ? ' (per side)' : ''} | ${e?.group ?? ''} | ${target} | ${s.repMin}–${s.repMax} | ${inc} | ${s.stallCount} |`]);
+  }
+  out.push(...rows.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])).map((r) => r[1]));
+
+  out.push('', '## Program (the cycle of workouts, in order)', '');
+  for (const t of await cycle()) {
+    const slots = await Promise.all(t.slots.map(async (s) => `${await name(s.exerciseId)} ${s.sets}×`));
+    out.push(`- **${t.name}**: ${slots.join(', ') || '(empty)'}`);
+  }
+
+  out.push('', '## Session log (oldest first)');
+  for (const s of sessions) {
+    const mins = Math.round(((s.finishedAt ?? s.startedAt) - s.startedAt) / 60000);
+    out.push('', `### ${day(s.startedAt)} — ${s.templateName} (${mins} min)`);
+    const mine = sets.filter((x) => x.sessionId === s.id).sort((a, b) => a.loggedAt - b.loggedAt);
+    const ids = [...new Set([...s.plan.map((p) => p.exerciseId), ...mine.map((x) => x.exerciseId)])];
+    for (const id of ids) {
+      const done = mine.filter((x) => x.exerciseId === id);
+      const slot = s.plan.find((p) => p.exerciseId === id);
+      const swapped = slot?.swappedFrom ? ` (swapped in for ${await name(slot.swappedFrom)})` : '';
+      if (!done.length) { out.push(`- ${await name(id)}${swapped}: skipped`); continue; }
+      const list = await Promise.all(done.map(async (x) => `${await w(id, x.weight)} × ${x.reps}${x.rir === null ? '' : ` @RIR ${x.rir}`}`));
+      const result = s.results?.find((r) => r.exerciseId === id);
+      out.push(`- ${await name(id)}${swapped}: ${list.join(', ')}${result ? ` → ${result.summary}` : ''}`);
+    }
+  }
+  return out.join('\n') + '\n';
 }
 
 // ---------- backup ----------

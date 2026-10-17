@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
   acceptStarterProgram, activeSession, createCustomExercise, cycle, exerciseHistory, exportAll, finishSession, getSettings, importAll,
-  lastSessionSets, logSet, saveTemplate, setTarget, startSession, swapSlot, updateCustomExercise, updateExerciseSettings,
+  lastSessionSets, logSet, saveTemplate, setTarget, startSession, swapSlot, trainingReport, updateCustomExercise, updateExerciseSettings,
 } from './repo';
 import { libraryExercise, registerCustomExercises } from '../lib/library';
 
@@ -98,6 +98,26 @@ describe('custom exercises', () => {
 
   it('rejects a blank name', async () => {
     await expect(createCustomExercise({ name: '  ', group: 'Arms', equipment: 'cable' })).rejects.toThrow('name');
+  });
+});
+
+describe('training report', () => {
+  it('lists current targets, the program and every finished session’s sets', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    await setTarget('back-squat', 80);
+    const sid = await startSession(a.id);
+    await logSet(sid, 'back-squat', 80, 8, 2);
+    await logSet(sid, 'back-squat', 80, 7, null);
+    await finishSession(sid);
+    await startSession(a.id);   // unfinished: left out
+
+    const text = await trainingReport();
+    expect(text).toContain('1 finished session,');
+    expect(text).toMatch(/\| Back Squat \| Legs \| 80 kg \| \d+–\d+ \| 2\.5 kg \| 1 \|/);
+    expect(text).toContain('- **Full Body A**: Back Squat');
+    expect(text).toContain('80 kg × 8 @RIR 2, 80 kg × 7');
+    expect(text.match(/### /g)).toHaveLength(1);
   });
 });
 

@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import type { Go } from '../App';
-import { eraseAll, exportAll, getSettings, importAll, updateSettings } from '../data/repo';
+import { eraseAll, exportAll, getSettings, importAll, trainingReport, updateSettings } from '../data/repo';
 
 // Embedded test pages (inside another page's frame) can't start downloads, so only offer a file when running on its own.
 const canDownload = (() => { try { return window.self === window.top; } catch { return false; } })();
@@ -11,17 +11,19 @@ export function SettingsScreen({ go }: { go: Go }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [paste, setPaste] = useState<string | null>(null);
   const [confirmErase, setConfirmErase] = useState(false);
+  const [report, setReport] = useState<string | null>(null);
+  const [reportMsg, setReportMsg] = useState<string | null>(null);
   if (!settings) return null;
 
   const backupText = async () => JSON.stringify(await exportAll());
+  const today = new Date().toISOString().slice(0, 10);
 
-  const saveFile = async () => {
-    const name = `dailyrep-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    const blob = new Blob([await backupText()], { type: 'application/json' });
+  const saveFile = async (text: string, name: string, type: string, title: string, setNote: (m: string) => void) => {
+    const blob = new Blob([text], { type });
     // On iPhone the share sheet is the reliable way to save a file (Save to Files, AirDrop, Mail).
-    const file = new File([blob], name, { type: 'application/json' });
+    const file = new File([blob], name, { type });
     if (navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: 'DailyRep backup' }); setMsg('Backup shared.'); } catch { /* cancelled */ }
+      try { await navigator.share({ files: [file], title }); setNote(`${title} shared.`); } catch { /* cancelled */ }
       return;
     }
     const a = document.createElement('a');
@@ -29,12 +31,17 @@ export function SettingsScreen({ go }: { go: Go }) {
     a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    setMsg('Backup file saved. If nothing downloaded, use Copy backup instead.');
+    setNote(`${title} saved. If nothing downloaded, use Copy instead.`);
   };
   const copy = async () => {
     const text = await backupText();
     try { await navigator.clipboard.writeText(text); setMsg('Backup copied. Paste it into Notes or an email to keep it safe.'); }
     catch { setPaste(text); setMsg("Couldn't copy automatically. Select the text below and copy it."); }
+  };
+  const copyReport = async () => {
+    const text = await trainingReport();
+    try { await navigator.clipboard.writeText(text); setReportMsg('Training log copied. Paste it into a chat with Claude.'); setReport(null); }
+    catch { setReport(text); setReportMsg("Couldn't copy automatically. Select the text below and copy it."); }
   };
   const restore = async (text: string) => {
     try { await importAll(text); setMsg('Backup restored.'); setPaste(null); }
@@ -63,7 +70,7 @@ export function SettingsScreen({ go }: { go: Go }) {
         <p className="small muted">Your training is stored on this phone only. Keep a backup until syncing arrives.</p>
         <div className="row">
           <button className="btn" onClick={copy}>Copy backup</button>
-          {canDownload && <button className="btn" onClick={saveFile}>Save backup file</button>}
+          {canDownload && <button className="btn" onClick={async () => saveFile(await backupText(), `dailyrep-backup-${today}.json`, 'application/json', 'DailyRep backup', setMsg)}>Save backup file</button>}
         </div>
         <label className="btn" style={{ textAlign: 'center' }}>
           Restore from a file
@@ -81,6 +88,17 @@ export function SettingsScreen({ go }: { go: Go }) {
             </div>
           )}
         {msg && <p className="small" role="status">{msg}</p>}
+      </section>
+
+      <section className="card stack">
+        <h2 className="subtitle">Analyse with Claude</h2>
+        <p className="small muted">Every finished workout, your current weights and your program as readable text. Paste it into Claude and ask how you're progressing.</p>
+        <div className="row">
+          <button className="btn" onClick={copyReport}>Copy training log</button>
+          {canDownload && <button className="btn" onClick={async () => saveFile(await trainingReport(), `dailyrep-log-${today}.md`, 'text/markdown', 'Training log', setReportMsg)}>Save as file</button>}
+        </div>
+        {report !== null && <textarea rows={8} readOnly value={report} aria-label="Training log" onFocus={(e) => e.target.select()} />}
+        {reportMsg && <p className="small" role="status">{reportMsg}</p>}
       </section>
 
       <section className="stack">
