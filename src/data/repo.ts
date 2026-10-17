@@ -183,7 +183,7 @@ export async function undoLastSet(sessionId: string, exerciseId: string): Promis
 
 export async function sessionSets(sessionId: string, exerciseId?: string): Promise<LoggedSet[]> {
   const all = await db.sets.where('sessionId').equals(sessionId).toArray();
-  return all.filter((x) => !exerciseId || x.exerciseId === exerciseId).sort((a, b) => a.loggedAt - b.loggedAt);
+  return all.filter((x) => !exerciseId || x.exerciseId === exerciseId).sort((a, b) => a.loggedAt - b.loggedAt || a.n - b.n);
 }
 
 /** Swap a Slot's Exercise for this Session only. Only allowed before any of its sets are logged. */
