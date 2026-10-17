@@ -186,6 +186,40 @@ export async function sessionSets(sessionId: string, exerciseId?: string): Promi
   return all.filter((x) => !exerciseId || x.exerciseId === exerciseId).sort((a, b) => a.loggedAt - b.loggedAt || a.n - b.n);
 }
 
+/** Number an Exercise's sets in a Session 1, 2, 3… in the order they were logged. */
+async function renumber(sessionId: string, exerciseId: string): Promise<void> {
+  const sets = await sessionSets(sessionId, exerciseId);
+  await db.sets.bulkPut(sets.map((x, i) => ({ ...x, n: i + 1 })));
+}
+
+/**
+ * Correct a logged Set's weight, reps, RIR or Exercise. Targets are left as they are:
+ * progression already ran when the Session finished, and the Lifter can change a Target on the Exercise screen.
+ */
+export async function updateSet(id: string, patch: Partial<Pick<LoggedSet, 'exerciseId' | 'weight' | 'reps' | 'rir'>>): Promise<void> {
+  const cur = await db.sets.get(id);
+  if (!cur) return;
+  const next = { ...cur, ...patch };
+  if (!(next.weight >= 0) || !Number.isInteger(next.reps) || next.reps < 0) throw new Error('Enter a weight of 0 or more and a whole number of reps.');
+  if (next.exerciseId !== cur.exerciseId) await ensureExercises([next.exerciseId]);
+  await db.transaction('rw', db.sets, async () => {
+    await db.sets.put(next);
+    if (next.exerciseId !== cur.exerciseId) {
+      await renumber(cur.sessionId, cur.exerciseId);
+      await renumber(cur.sessionId, next.exerciseId);
+    }
+  });
+}
+
+export async function deleteSet(id: string): Promise<void> {
+  const cur = await db.sets.get(id);
+  if (!cur) return;
+  await db.transaction('rw', db.sets, async () => {
+    await db.sets.delete(id);
+    await renumber(cur.sessionId, cur.exerciseId);
+  });
+}
+
 /** Swap a Slot's Exercise for this Session only. Only allowed before any of its sets are logged. */
 export async function swapSlot(sessionId: string, index: number, exerciseId: string): Promise<void> {
   const s = await db.sessions.get(sessionId);

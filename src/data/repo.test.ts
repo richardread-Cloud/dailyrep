@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
-  acceptStarterProgram, activeSession, createCustomExercise, cycle, exerciseHistory, exportAll, finishSession, getSettings, importAll,
+  acceptStarterProgram, activeSession, createCustomExercise, cycle, deleteSet, exerciseHistory, sessionSets, updateSet, exportAll, finishSession, getSettings, importAll,
   lastSessionSets, logSet, saveTemplate, setTarget, startSession, swapSlot, trainingReport, updateCustomExercise, updateExerciseSettings,
 } from './repo';
 import { libraryExercise, registerCustomExercises } from '../lib/library';
@@ -98,6 +98,38 @@ describe('custom exercises', () => {
 
   it('rejects a blank name', async () => {
     await expect(createCustomExercise({ name: '  ', group: 'Arms', equipment: 'cable' })).rejects.toThrow('name');
+  });
+});
+
+describe('correcting logged sets', () => {
+  it('fixes weight, reps and RIR without touching the Target', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    await setTarget('back-squat', 80);
+    const sid = await startSession(a.id);
+    const s1 = await logSet(sid, 'back-squat', 80, 8, null);
+    await finishSession(sid);
+    const target = (await db.exercises.get('back-squat'))?.targetWeight;
+    await updateSet(s1.id, { weight: 85, reps: 6, rir: 1 });
+    expect(await db.sets.get(s1.id)).toMatchObject({ weight: 85, reps: 6, rir: 1 });
+    expect((await db.exercises.get('back-squat'))?.targetWeight).toBe(target);
+    await expect(updateSet(s1.id, { reps: 2.5 })).rejects.toThrow('whole number');
+  });
+
+  it('moves a set to another exercise and renumbers both', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    const sid = await startSession(a.id);
+    const s1 = await logSet(sid, 'bench-press', 60, 8, null);
+    const s2 = await logSet(sid, 'bench-press', 60, 8, null);
+    const s3 = await logSet(sid, 'bench-press', 60, 7, null);
+    await finishSession(sid);
+    await updateSet(s2.id, { exerciseId: 'dip' });
+    expect(await db.exercises.get('dip')).toBeDefined();
+    expect((await sessionSets(sid, 'bench-press')).map((x) => [x.id, x.n])).toEqual([[s1.id, 1], [s3.id, 2]]);
+    expect((await sessionSets(sid, 'dip')).map((x) => [x.id, x.n])).toEqual([[s2.id, 1]]);
+    await deleteSet(s1.id);
+    expect((await sessionSets(sid, 'bench-press')).map((x) => [x.id, x.n])).toEqual([[s3.id, 1]]);
   });
 });
 

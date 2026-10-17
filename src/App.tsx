@@ -4,6 +4,7 @@ import { db } from './data/db';
 import { getSettings } from './data/repo';
 import { registerCustomExercises } from './lib/library';
 import { ExerciseScreen } from './screens/ExerciseScreen';
+import { HistoryScreen } from './screens/HistoryScreen';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { ProgramScreen } from './screens/ProgramScreen';
@@ -20,6 +21,7 @@ export type Route =
   | { name: 'program' }
   | { name: 'template'; id: string }
   | { name: 'progress' }
+  | { name: 'history' }
   | { name: 'exercise'; id: string; from: Route }
   | { name: 'settings' };
 
@@ -58,6 +60,7 @@ export function App() {
     case 'program': return <ProgramScreen go={go} />;
     case 'template': return <TemplateScreen id={route.id} go={go} />;
     case 'progress': return <ProgressScreen go={go} />;
+    case 'history': return <HistoryScreen go={go} />;
     case 'exercise': return <ExerciseScreen key={route.id} id={route.id} back={route.from} go={go} />;
     case 'settings': return <SettingsScreen go={go} />;
   }

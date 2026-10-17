@@ -71,6 +71,7 @@ export function Home({ go }: { go: Go }) {
       <nav className="open-nav" aria-label="Main">
         <button onClick={() => go({ name: 'program' })}>Program</button>
         <button onClick={() => go({ name: 'progress' })}>Progress</button>
+        <button onClick={() => go({ name: 'history' })}>History</button>
         <button onClick={() => go({ name: 'settings' })}>Settings</button>
       </nav>
     </main>
