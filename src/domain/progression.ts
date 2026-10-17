@@ -16,6 +16,14 @@ export interface Rules {
   increment: number;
   /** Reps-only Exercises never change weight. */
   repsOnly?: boolean;
+  /** Bodyweight Exercises log only the added load, so an Estimated 1RM from it means nothing and the weight rises one Increment at a time. */
+  bodyweight?: boolean;
+}
+
+/** Extra facts about this Session for this Exercise. */
+export interface SessionFacts {
+  /** No earlier finished Session included this Exercise: the result is a Baseline and never counts toward a Stall. */
+  first?: boolean;
 }
 
 export interface WorkSet {
@@ -24,7 +32,7 @@ export interface WorkSet {
   rir: number | null;
 }
 
-export type OutcomeKind = 'up' | 'hold' | 'prog' | 'none' | 'deload' | 'top' | 'stall';
+export type OutcomeKind = 'up' | 'hold' | 'prog' | 'none' | 'deload' | 'top' | 'stall' | 'baseline';
 
 export interface Outcome {
   kind: OutcomeKind;
@@ -48,12 +56,34 @@ export function deloadWeight(weight: number, increment: number): number {
   return r2(Math.max(0, Math.min(roundTo(weight * 0.9, increment), weight - increment)));
 }
 
+const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const floorTo = (x: number, inc: number) => r2(Math.floor(r2(x / inc)) * inc);
+
+/**
+ * The next Target after every Working Set reached the top of the Rep Range. Usually one Increment up, but when the reps
+ * (plus RIR, 0 if not logged) overshoot the range, it's the weight the median Estimated 1RM predicts for mid-range reps at RIR 2,
+ * rounded down to the Increment and capped at +15% or 4 Increments, whichever is smaller.
+ */
+export function weightAfterTop(target: number, rules: Rules, sets: WorkSet[]): number {
+  const oneUp = r2(target + rules.increment);
+  if (rules.bodyweight || !sets.length || rules.increment <= 0) return oneUp;
+  const e1rm = median(sets.map((s) => s.weight * (1 + (s.reps + (s.rir ?? 0)) / 30)));
+  const mid = (rules.repMin + rules.repMax) / 2;
+  const predicted = floorTo(e1rm / (1 + (mid + 2) / 30), rules.increment);
+  const cap = floorTo(target + Math.min(target * 0.15, 4 * rules.increment), rules.increment);
+  return Math.max(oneUp, Math.min(predicted, cap));
+}
+
 export function evaluate(
   state: ProgressState,
   rules: Rules,
   sets: WorkSet[],
   plannedSets: number,
   fmt: (w: number) => string = defaultFmt,
+  facts: SessionFacts = {},
 ): Outcome {
   const tw = state.targetWeight;
   const dropped = sets.some((s) => s.weight < tw);
@@ -64,16 +94,20 @@ export function evaluate(
   const lastRir = sets.length ? sets[sets.length - 1].rir : null;
   const improved = !dropped && complete && (state.best === null || avgReps > state.best);
   const bestTxt = state.best === null ? 'your first session at this weight' : `your best of ${r2(state.best)}`;
+  // A Baseline never counts toward a Stall.
+  const first = !!facts.first;
+  const baselineDetail = `First time logged: ${r2(avgReps)} reps a set at ${fmt(tw)}. Next time, beat it.`;
 
   // Reps-only: the weight never moves. Topping the range or stalling only produces a prompt.
   if (rules.repsOnly) {
-    const stallCount = improved ? 0 : state.stallCount + 1;
+    const stallCount = improved ? 0 : first ? state.stallCount : state.stallCount + 1;
     const best = improved ? avgReps : state.best;
     if (allAtTop) {
       return { kind: 'top', avgReps, summary: 'Top of the rep range',
         detail: `Every set reached ${rules.repMax}. Raise the rep range or move to a harder exercise.`,
         next: { targetWeight: tw, best, stallCount: 0 } };
     }
+    if (first) return { kind: 'baseline', avgReps, summary: 'Baseline', detail: `First time logged: ${r2(avgReps)} reps a set. Next time, beat it.`, next: { targetWeight: tw, best, stallCount } };
     if (stallCount >= STALL_LIMIT) {
       return { kind: 'stall', avgReps, summary: 'Stalled',
         detail: `${STALL_LIMIT} sessions without more reps. Try a lower rep range or an easier variation for a while.`,
@@ -85,13 +119,16 @@ export function evaluate(
   }
 
   if (allAtTop && lastRir !== 0) {
-    const w = r2(tw + rules.increment);
-    return { kind: 'up', avgReps, summary: `Weight up to ${fmt(w)}`,
-      detail: `Every set reached ${rules.repMax} reps${lastRir === null ? '' : ` with ${lastRir} left on the last set`}. Next time aim for ${rules.repMin}+ reps at ${fmt(w)}.`,
+    const w = weightAfterTop(tw, rules, sets);
+    const big = w > r2(tw + rules.increment);
+    return { kind: 'up', avgReps, summary: `Weight up to ${fmt(w)}${big ? ' (reps well above range)' : ''}`,
+      detail: big
+        ? `Your reps went well past ${rules.repMax}, so the jump is bigger than one step: ${fmt(w)} should land you mid-range with a couple of reps to spare.`
+        : `Every set reached ${rules.repMax} reps${lastRir === null ? '' : ` with ${lastRir} left on the last set`}. Next time aim for ${rules.repMin}+ reps at ${fmt(w)}.`,
       next: { targetWeight: w, best: null, stallCount: 0 } };
   }
 
-  let stallCount = improved ? 0 : state.stallCount + 1;
+  let stallCount = improved ? 0 : first ? state.stallCount : state.stallCount + 1;
   let best = improved ? avgReps : state.best;
   let kind: OutcomeKind, summary: string, detail: string;
   if (allAtTop) {
@@ -109,6 +146,10 @@ export function evaluate(
   } else {
     kind = 'none'; summary = `No progress (${stallCount} of ${STALL_LIMIT})`;
     detail = `Average ${r2(avgReps)} reps a set didn't beat ${bestTxt}.`;
+  }
+  if (first && kind !== 'hold') {
+    kind = 'baseline'; summary = 'Baseline';
+    if (improved) detail = baselineDetail;
   }
   let targetWeight = tw;
   if (stallCount >= STALL_LIMIT) {

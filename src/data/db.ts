@@ -24,6 +24,8 @@ export interface ExerciseState {
   targetWeight: number | null;
   best: number | null;
   stallCount: number;
+  /** Hidden from the "not in any workout" list. Cleared when the Exercise is added to a Template again. */
+  archived?: boolean;
   updatedAt: number;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deloadWeight, evaluate, shouldOfferDrop, withRepRange, type ProgressState, type Rules, type WorkSet } from './progression';
+import { deloadWeight, evaluate, shouldOfferDrop, weightAfterTop, withRepRange, type ProgressState, type Rules, type WorkSet } from './progression';
 
 const BENCH: Rules = { repMin: 8, repMax: 12, increment: 2.5 };
 const LATERAL: Rules = { repMin: 10, repMax: 15, increment: 2 };
@@ -67,6 +67,68 @@ describe('Double Progression (scenarios accepted in the prototype)', () => {
 
   it('changing the rep range keeps the weight, clamps the best and resets the stall', () => {
     expect(withRepRange({ targetWeight: 60, best: 11, stallCount: 2 }, 5, 8)).toEqual({ targetWeight: 60, best: 8, stallCount: 0 });
+  });
+});
+
+describe('Baseline: the first session of an Exercise', () => {
+  const sets = (w: number, reps: number[]) => reps.map((r) => ({ weight: w, reps: r, rir: null }));
+
+  it('is labelled Baseline instead of "Progress: more reps"', () => {
+    const out = evaluate({ targetWeight: 60, best: null, stallCount: 0 }, BENCH, sets(60, [10, 9, 8]), 3, undefined, { first: true });
+    expect(out).toMatchObject({ kind: 'baseline', summary: 'Baseline', next: { targetWeight: 60, best: 9, stallCount: 0 } });
+  });
+
+  it('never counts toward a Stall, even when incomplete or dropped', () => {
+    const state: ProgressState = { targetWeight: 60, best: null, stallCount: 0 };
+    expect(evaluate(state, BENCH, sets(60, [10]), 3, undefined, { first: true }).next.stallCount).toBe(0);
+    expect(evaluate(state, BENCH, [...sets(60, [9]), ...sets(57.5, [8, 8])], 3, undefined, { first: true })).toMatchObject({ kind: 'baseline', next: { stallCount: 0 } });
+    // Without the flag the same incomplete session is a "No progress".
+    expect(evaluate(state, BENCH, sets(60, [10]), 3).next.stallCount).toBe(1);
+  });
+
+  it('a Reps-only first session is a Baseline too', () => {
+    const out = evaluate({ targetWeight: 0, best: null, stallCount: 0 }, { repMin: 10, repMax: 20, increment: 0, repsOnly: true }, sets(0, [12, 11]), 2, undefined, { first: true });
+    expect(out).toMatchObject({ kind: 'baseline', next: { stallCount: 0, best: 11.5 } });
+  });
+
+  it('topping the range on a first session still raises the weight', () => {
+    expect(evaluate({ targetWeight: 60, best: null, stallCount: 0 }, BENCH, sets(60, [12, 12, 12]), 3, undefined, { first: true }).kind).toBe('up');
+  });
+});
+
+describe('Bigger jumps when reps overshoot the range', () => {
+  const DEADLIFT: Rules = { repMin: 4, repMax: 6, increment: 2.5 };
+  const sets = (w: number, reps: number[], rir: number | null = null) => reps.map((r) => ({ weight: w, reps: r, rir }));
+
+  it('jumps by the e1RM estimate, rounded down to the Increment, with the reason shown', () => {
+    // e1RM = 50 × (1 + 11/30) = 68.3; for 5 reps at RIR 2: 68.3 / (1 + 7/30) = 55.4 → 55. Cap: min(7.5, 10) → 57.5.
+    const out = evaluate({ targetWeight: 50, best: null, stallCount: 0 }, DEADLIFT, sets(50, [8, 8, 8], 3), 3);
+    expect(out.next.targetWeight).toBe(55);
+    expect(out.summary).toBe('Weight up to 55 kg (reps well above range)');
+  });
+
+  it('is capped at +15% or 4 Increments, whichever is smaller', () => {
+    expect(weightAfterTop(50, DEADLIFT, sets(50, [15, 15, 15], 4))).toBe(57.5);    // 15% = 7.5 < 4 × 2.5 = 10
+    expect(weightAfterTop(200, DEADLIFT, sets(200, [15, 15, 15], 4))).toBe(210);   // 4 × 2.5 = 10 < 15% = 30
+  });
+
+  it('uses the median set and treats a missing RIR as 0', () => {
+    // Medians: 50 × (1 + 8/30), the outlier 20-rep set is ignored. → 63.3 / 1.233 = 51.4 → still one Increment: 52.5.
+    expect(weightAfterTop(50, DEADLIFT, [{ weight: 50, reps: 8, rir: null }, { weight: 50, reps: 8, rir: null }, { weight: 50, reps: 20, rir: null }])).toBe(52.5);
+  });
+
+  it('never goes up by less than one Increment', () => {
+    expect(weightAfterTop(60, BENCH, sets(60, [12, 12, 12]))).toBe(62.5);
+    const out = evaluate({ targetWeight: 60, best: null, stallCount: 0 }, BENCH, sets(60, [12, 12, 12], 1), 3);
+    expect(out.summary).toBe('Weight up to 62.5 kg');
+  });
+
+  it("Bodyweight Exercises only ever go up one Increment, since the logged weight isn't the whole load", () => {
+    expect(weightAfterTop(0, { ...DEADLIFT, bodyweight: true }, sets(0, [15, 15, 15], 4))).toBe(2.5);
+  });
+
+  it('RIR 0 on the last set still holds the weight', () => {
+    expect(evaluate({ targetWeight: 50, best: null, stallCount: 0 }, DEADLIFT, [...sets(50, [8, 8], 3), { weight: 50, reps: 8, rir: 0 }], 3).kind).toBe('hold');
   });
 });
 

@@ -126,8 +126,36 @@ export async function addTemplate(name: string): Promise<string> {
 }
 
 export async function saveTemplate(t: Template): Promise<void> {
-  await ensureExercises(t.slots.map((s) => s.exerciseId));
+  const ids = t.slots.map((s) => s.exerciseId);
+  await ensureExercises(ids);
   await db.templates.put({ ...t, updatedAt: Date.now() });
+  const archived = (await db.exercises.bulkGet(ids)).filter((e) => e?.archived);
+  if (archived.length) await db.exercises.bulkPut(archived.map((e) => ({ ...e!, archived: false, updatedAt: Date.now() })));
+}
+
+/** Add an Exercise to the end of a Template with 3 Working Sets. */
+export async function addToTemplate(templateId: string, exerciseId: string): Promise<void> {
+  const t = await db.templates.get(templateId);
+  if (t) await saveTemplate({ ...t, slots: [...t.slots, { exerciseId, sets: 3 }] });
+}
+
+/** Exercises the Lifter has trained or set a weight for that aren't in any Template and haven't been archived. */
+export async function unusedExercises(): Promise<ExerciseState[]> {
+  const inProgram = new Set((await cycle()).flatMap((t) => t.slots.map((s) => s.exerciseId)));
+  const trained = new Set((await db.sets.toArray()).map((x) => x.exerciseId));
+  return (await db.exercises.toArray())
+    .filter((e) => !e.archived && !inProgram.has(e.id) && (trained.has(e.id) || (e.targetWeight ?? 0) > 0));
+}
+
+export async function archiveExercise(id: string): Promise<void> {
+  await db.exercises.update(id, { archived: true, updatedAt: Date.now() });
+}
+
+/** Exercises in the program that still need a starting weight. */
+export async function exercisesWithoutTarget(): Promise<string[]> {
+  const ids = [...new Set((await cycle()).flatMap((t) => t.slots.map((s) => s.exerciseId)))];
+  const states = await db.exercises.bulkGet(ids);
+  return ids.filter((_, i) => states[i]?.targetWeight === null);
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
@@ -211,31 +239,119 @@ export async function updateSet(id: string, patch: Partial<Pick<LoggedSet, 'exer
   });
 }
 
+/** Delete a logged Set. A finished Session left with no sets is deleted too. */
 export async function deleteSet(id: string): Promise<void> {
   const cur = await db.sets.get(id);
   if (!cur) return;
-  await db.transaction('rw', db.sets, async () => {
+  await db.transaction('rw', db.sets, db.sessions, async () => {
     await db.sets.delete(id);
     await renumber(cur.sessionId, cur.exerciseId);
+    const s = await db.sessions.get(cur.sessionId);
+    if (s && s.finishedAt !== null && !(await db.sets.where('sessionId').equals(cur.sessionId).count())) await db.sessions.delete(cur.sessionId);
   });
 }
 
-/** Swap a Slot's Exercise for this Session only. Only allowed before any of its sets are logged. */
-export async function swapSlot(sessionId: string, index: number, exerciseId: string): Promise<void> {
+/** Delete finished Sessions that have no sets, such as ones finished empty before that was prevented. */
+export async function removeEmptySessions(): Promise<void> {
+  await db.transaction('rw', db.sets, db.sessions, async () => {
+    const withSets = new Set((await db.sets.toArray()).map((x) => x.sessionId));
+    const empty = await db.sessions.filter((s) => s.finishedAt !== null && !withSets.has(s.id)).primaryKeys();
+    await db.sessions.bulkDelete(empty);
+  });
+}
+
+/** Put `exerciseId` in place of `original` in a Template, keeping the Slot's sets. */
+async function replaceInTemplate(templateId: string, original: string, exerciseId: string): Promise<void> {
+  const t = await db.templates.get(templateId);
+  const i = t?.slots.findIndex((p) => p.exerciseId === original) ?? -1;
+  if (t && i >= 0) await saveTemplate({ ...t, slots: t.slots.map((p, k) => (k === i ? { ...p, exerciseId } : p)) });
+}
+
+/**
+ * Swap a Slot's Exercise. Only allowed before any of its sets are logged. A one-off Swap is a substitution for this Session
+ * only; a permanent one also replaces the Exercise in the Template.
+ */
+export async function swapSlot(sessionId: string, index: number, exerciseId: string, permanent = false): Promise<void> {
   const s = await db.sessions.get(sessionId);
   if (!s) return;
   const slot = s.plan[index];
   if ((await sessionSets(sessionId, slot.exerciseId)).length) return;
   await ensureExercises([exerciseId]);
-  const plan = s.plan.map((p, i): Slot => (i === index ? { exerciseId, sets: p.sets, swappedFrom: p.swappedFrom ?? p.exerciseId } : p));
+  const original = slot.swappedFrom ?? slot.exerciseId;
+  if (permanent) await replaceInTemplate(s.templateId, original, exerciseId);
+  const plan = s.plan.map((p, i): Slot => (i !== index ? p : permanent ? { exerciseId, sets: p.sets } : { exerciseId, sets: p.sets, swappedFrom: original }));
   await db.sessions.put({ ...s, plan });
 }
 
-/** Finish a Session: run Double Progression for every Exercise with logged sets and advance the Cycle. */
+/** Exercises with sets logged in a Session that aren't in its plan, e.g. after correcting a set's Exercise in History. */
+export async function unplannedExercises(sessionId: string): Promise<{ exerciseId: string; sets: number; unlogged: string[] }[]> {
+  const s = await db.sessions.get(sessionId);
+  if (!s) return [];
+  const sets = await sessionSets(sessionId);
+  const planned = new Set(s.plan.map((p) => p.exerciseId));
+  const logged = new Set(sets.map((x) => x.exerciseId));
+  const unlogged = s.plan.filter((p) => !logged.has(p.exerciseId)).map((p) => p.exerciseId);
+  return [...logged].filter((id) => !planned.has(id))
+    .map((exerciseId) => ({ exerciseId, sets: sets.filter((x) => x.exerciseId === exerciseId).length, unlogged }));
+}
+
+/**
+ * Settle an Exercise logged outside a Session's plan. With `replaces` it takes that Slot's place; without, it's added as an extra.
+ * Permanent also changes the Template; one-off records a substitution for that Session only.
+ */
+export async function resolveUnplanned(sessionId: string, exerciseId: string, replaces: string | null, permanent: boolean): Promise<void> {
+  const s = await db.sessions.get(sessionId);
+  if (!s) return;
+  const count = (await sessionSets(sessionId, exerciseId)).length;
+  let plan: Slot[];
+  if (replaces) {
+    const original = s.plan.find((p) => p.exerciseId === replaces)?.swappedFrom ?? replaces;
+    plan = s.plan.map((p) => (p.exerciseId !== replaces ? p : permanent ? { exerciseId, sets: p.sets } : { exerciseId, sets: p.sets, swappedFrom: original }));
+    if (permanent) await replaceInTemplate(s.templateId, original, exerciseId);
+  } else {
+    plan = [...s.plan, { exerciseId, sets: count }];
+    if (permanent) await addToTemplate(s.templateId, exerciseId);
+  }
+  await db.sessions.put({ ...s, plan });
+}
+
+/** A Session must last a minute to count; a shorter one is treated as empty. */
+export const MIN_SESSION_MS = 60_000;
+export const tooShort = (s: Pick<Session, 'startedAt'>, endedAt: number) => endedAt - s.startedAt < MIN_SESSION_MS;
+/** A finished Session that counts: it lasted at least a minute. Sessions with no sets are deleted, so they never get here. */
+export const counts = (s: Session) => s.finishedAt !== null && !tooShort(s, s.finishedAt);
+
+/** True when no other counting Session has sets of this Exercise. */
+async function firstTime(exerciseId: string, sessionId: string): Promise<boolean> {
+  const others = new Set((await db.sets.where('exerciseId').equals(exerciseId).toArray()).map((x) => x.sessionId).filter((id) => id !== sessionId));
+  const sessions = await db.sessions.bulkGet([...others]);
+  return !sessions.some((s) => s && counts(s));
+}
+
+/** Whether this Session is the first time each of these Exercises is being trained. */
+export async function firstTimes(exerciseIds: string[], sessionId: string): Promise<Record<string, boolean>> {
+  return Object.fromEntries(await Promise.all(exerciseIds.map(async (id) => [id, await firstTime(id, sessionId)] as const)));
+}
+
+/** Finished Sessions that lasted under a minute, from before such Sessions were refused. */
+export async function shortSessions(): Promise<Session[]> {
+  return db.sessions.filter((s) => s.finishedAt !== null && !counts(s)).toArray();
+}
+
+/**
+ * Finish a Session: run Double Progression for every Exercise with logged sets and advance the Cycle.
+ * A Session with no sets logged is deleted instead, and the Cycle stays where it was. One under a minute old can't be finished:
+ * the Lifter is offered to delete it or keep training.
+ */
 export async function finishSession(sessionId: string): Promise<ExerciseResult[]> {
   return db.transaction('rw', [db.sessions, db.sets, db.exercises, db.settings, db.templates, db.customExercises], async () => {
     const s = await db.sessions.get(sessionId);
     if (!s) throw new Error('Session not found');
+    if (!(await db.sets.where('sessionId').equals(sessionId).count())) {
+      await db.sessions.delete(sessionId);
+      return [];
+    }
+    if (tooShort(s, Date.now())) throw new Error("A session under a minute long doesn't count. Delete it or keep training.");
     const { unit } = await getSettings();
     const results: ExerciseResult[] = [];
     const seen = new Set<string>();
@@ -248,8 +364,8 @@ export async function finishSession(sessionId: string): Promise<ExerciseResult[]
       if (!sets.length || !ex || !lib) continue;
       const planned = s.plan.filter((p) => p.exerciseId === slot.exerciseId).reduce((a, p) => a + p.sets, 0);
       const state: ProgressState = { targetWeight: ex.targetWeight ?? sets[0].weight, best: ex.best, stallCount: ex.stallCount };
-      const out = evaluate(state, { repMin: ex.repMin, repMax: ex.repMax, increment: ex.increment, repsOnly: lib.repsOnly }, sets, planned,
-        (w) => fmtWeight(w, unit, lib.equipment));
+      const rules = { repMin: ex.repMin, repMax: ex.repMax, increment: ex.increment, repsOnly: lib.repsOnly, bodyweight: lib.equipment === 'bodyweight' };
+      const out = evaluate(state, rules, sets, planned, (w) => fmtWeight(w, unit, lib.equipment), { first: await firstTime(slot.exerciseId, sessionId) });
       await db.exercises.put({ ...ex, ...out.next, updatedAt: Date.now() });
       results.push({ exerciseId: slot.exerciseId, kind: out.kind, summary: out.summary, detail: out.detail, nextWeight: out.next.targetWeight });
     }
@@ -313,7 +429,7 @@ const day = (t: number) => new Date(t).toISOString().slice(0, 10);
 /** Every finished Session, plus current Targets and the Cycle, as Markdown a person can paste into a chat. */
 export async function trainingReport(): Promise<string> {
   const { unit } = await getSettings();
-  const sessions = (await db.sessions.filter((s) => s.finishedAt !== null).toArray()).sort((a, b) => a.startedAt - b.startedAt);
+  const sessions = (await db.sessions.filter(counts).toArray()).sort((a, b) => a.startedAt - b.startedAt);
   const sets = await db.sets.toArray();
   const names = new Map<string, LibraryExercise | undefined>();
   const ex = async (id: string) => {
@@ -330,7 +446,8 @@ export async function trainingReport(): Promise<string> {
     '# My DailyRep training log',
     '',
     'I track my strength training in DailyRep, which uses double progression: each exercise has a target weight and a rep range;',
-    'when every planned set reaches the top of the range the weight goes up by the increment, and after 3 sessions with no progress it deloads.',
+    'when every planned set reaches the top of the range the weight goes up by the increment (more if the reps went well past the range),',
+    'and after 3 sessions with no progress it deloads. "Baseline" marks the first time an exercise was logged.',
     'Please analyse my progress per exercise, my current working weights, any stalls or imbalances, and suggest what to focus on next.',
     '',
     `Exported ${day(Date.now())}. Weights are in ${unit}. "RIR" = reps in reserve. "per side" = weight of one dumbbell or one side.`,
@@ -366,7 +483,7 @@ export async function trainingReport(): Promise<string> {
     for (const id of ids) {
       const done = mine.filter((x) => x.exerciseId === id);
       const slot = s.plan.find((p) => p.exerciseId === id);
-      const swapped = slot?.swappedFrom ? ` (swapped in for ${await name(slot.swappedFrom)})` : '';
+      const swapped = slot?.swappedFrom ? ` (substitution for ${await name(slot.swappedFrom)})` : '';
       if (!done.length) { out.push(`- ${await name(id)}${swapped}: skipped`); continue; }
       const list = await Promise.all(done.map(async (x) => `${await w(id, x.weight)} × ${x.reps}${x.rir === null ? '' : ` @RIR ${x.rir}`}`));
       const result = s.results?.find((r) => r.exerciseId === id);

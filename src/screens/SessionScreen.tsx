@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Go } from '../App';
 import { Demo, HowToSheet } from '../components/Demo';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { db, type ExerciseState, type LoggedSet, type Session, type Slot } from '../data/db';
 import {
-  finishSession, getSettings, lastSessionSets, logSet, sessionSets, setTarget, swapSlot, undoLastSet, updateSessionUi,
+  discardSession, finishSession, firstTimes, getSettings, lastSessionSets, logSet, sessionSets, setTarget, swapSlot, tooShort, undoLastSet, updateSessionUi,
 } from '../data/repo';
+import { setWarnings, targetWarning } from '../domain/checks';
 import { shouldOfferDrop } from '../domain/progression';
 import { fmtNum, fmtWeight, type Unit } from '../domain/units';
 import { warmupSets } from '../domain/warmups';
@@ -24,6 +25,21 @@ interface Ctx {
   exercises: Record<string, ExerciseState>;
   sets: LoggedSet[];
   unit: Unit;
+  /** Exercises being trained for the first time in this Session. */
+  first: Record<string, boolean>;
+}
+
+/** "Check this?" warnings for the set about to be logged. */
+function draftWarnings(ctx: Ctx, index: number, reps: number): string[] {
+  const { slot, ex, lib, done, weight } = slotInfo(ctx, index);
+  if (!ex || weight === null) return [];
+  return setWarnings({ weight, reps, target: ex.targetWeight, repMin: ex.repMin, otherReps: done.map((x) => x.reps), first: !!ctx.first[slot.exerciseId], bodyweight: lib.equipment === 'bodyweight' },
+    (w) => fmtWeight(w, ctx.unit, lib.equipment));
+}
+
+function CheckThis({ warnings }: { warnings: string[] }) {
+  if (!warnings.length) return null;
+  return <div className="notice warn" role="status"><span><b>Check this?</b> {warnings.join(' ')}</span></div>;
 }
 
 /** Per-Slot view of where the Lifter is. */
@@ -44,7 +60,7 @@ export function SessionScreen({ id, go }: { id: string; go: Go }) {
     if (!session) return null;
     const ids = [...new Set(session.plan.map((p) => p.exerciseId))];
     const exercises = Object.fromEntries((await db.exercises.bulkGet(ids)).filter((e): e is ExerciseState => !!e).map((e) => [e.id, e]));
-    return { session, exercises, sets: await sessionSets(id), unit: (await getSettings()).unit };
+    return { session, exercises, sets: await sessionSets(id), unit: (await getSettings()).unit, first: await firstTimes(ids, id) };
   }, [id]);
   const currentId = ctx ? ctx.session.plan[ctx.session.ui.current]?.exerciseId : undefined;
   const lastSets = useLiveQuery(async () => (currentId ? lastSessionSets(currentId, id) : []), [currentId, id]) ?? [];
@@ -53,6 +69,8 @@ export function SessionScreen({ id, go }: { id: string; go: Go }) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [howTo, setHowTo] = useState<string | null>(null);
   const [swapping, setSwapping] = useState(false);
+  /** Exercise picked as a Swap, waiting for "permanently or just today?". */
+  const [swapTo, setSwapTo] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [editWeight, setEditWeight] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -142,8 +160,8 @@ export function SessionScreen({ id, go }: { id: string; go: Go }) {
   }
 
   const finish = async () => {
-    await finishSession(id);
-    go({ name: 'summary', id });
+    // With no sets logged the Session is deleted, so there's no summary to show.
+    go((await finishSession(id)).length ? { name: 'summary', id } : { name: 'home' });
   };
 
   return (
@@ -172,17 +190,40 @@ export function SessionScreen({ id, go }: { id: string; go: Go }) {
 
       {howTo && <HowToSheet id={howTo} onClose={() => setHowTo(null)} />}
       {swapping && currentId && (
-        <ExercisePicker title="Swap for today" similarTo={currentId}
+        <ExercisePicker title="Swap exercise" similarTo={currentId}
           exclude={session.plan.map((p) => p.exerciseId)}
           onClose={() => setSwapping(false)}
-          onPick={async (exId) => { await swapSlot(id, cur, exId); setSwapping(false); }} />
+          onPick={(exId) => { setSwapTo(exId); setSwapping(false); }} />
+      )}
+      {swapTo && currentId && (
+        <div className="sheet" onClick={() => setSwapTo(null)}>
+          <div className="sheet-card" role="dialog" aria-label="Swap permanently or one-off" onClick={(e) => e.stopPropagation()}>
+            <h2>Swap permanently, or one-off substitution?</h2>
+            <p>{libraryExercise(swapTo)?.name} in place of {libraryExercise(session.plan[cur].swappedFrom ?? currentId)?.name}.</p>
+            <button className="btn-primary" onClick={async () => { await swapSlot(id, cur, swapTo); setSwapTo(null); }}>Just today</button>
+            <button className="btn" onClick={async () => { await swapSlot(id, cur, swapTo, true); setSwapTo(null); }}>Permanently: change {session.templateName}</button>
+            <button className="link muted" onClick={() => setSwapTo(null)}>Cancel</button>
+          </div>
+        </div>
       )}
       {finishing && (
         <div className="sheet" onClick={() => setFinishing(false)}>
           <div className="sheet-card" role="dialog" aria-label="Finish session" onClick={(e) => e.stopPropagation()}>
-            <h2>Finish session?</h2>
-            <p>{doneSets} of {totalSets} sets logged. DailyRep will update your targets for every exercise you did. Exercises with no sets are left as they are.</p>
-            <button className="btn-primary" onClick={finish}>Finish and see results</button>
+            {doneSets && tooShort(session, Date.now()) ? (
+              <>
+                <h2>Delete this session?</h2>
+                <p>It's lasted under a minute, so it won't count as a session or change any targets.</p>
+                <button className="btn-primary" onClick={async () => { await discardSession(id); go({ name: 'home' }); }}>Delete session</button>
+              </>
+            ) : (
+              <>
+                <h2>Finish session?</h2>
+                <p>{doneSets
+                  ? `${doneSets} of ${totalSets} sets logged. DailyRep will update your targets for every exercise you did. Exercises with no sets are left as they are.`
+                  : "No sets logged, so this session won't be saved and you'll stay on the same workout next time."}</p>
+                <button className="btn-primary" onClick={finish}>Finish and see results</button>
+              </>
+            )}
             <button className="btn" onClick={() => setFinishing(false)}>Keep training</button>
           </div>
         </div>
@@ -287,6 +328,7 @@ function Focus(p: {
           <input type="number" inputMode="decimal" min={0} step="any" value={val} autoFocus
             onChange={(e) => p.setEditWeight(e.target.value)} aria-label="Weight" />
         </label>
+        {ok && lib.equipment !== 'bodyweight' && <CheckThis warnings={[targetWarning(r2(n), ex.targetWeight, (w) => fmtWeight(w, unit)) ?? ''].filter(Boolean)} />}
         <div className="grow" />
         <button className="btn-primary" disabled={!ok} onClick={async () => { await setTarget(slot.exerciseId, r2(n)); p.setEditWeight(null); }}>Save weight</button>
         {ex.targetWeight !== null && <button className="link muted" onClick={() => p.setEditWeight(null)}>Cancel</button>}
@@ -343,6 +385,7 @@ function Focus(p: {
               ))}
             </div>
           </div>
+          <CheckThis warnings={draftWarnings(ctx, index, d.reps)} />
           <div className="grow" />
           <button className="btn-primary" onClick={() => p.onLog(index, d)}>Done</button>
           {done.length > 0 && <button className="link muted" onClick={() => undoLastSet(id, slot.exerciseId)}>Undo last set</button>}
@@ -446,20 +489,24 @@ function ListView({ ctx, draftFor, setDraft, onLog, onOpen }: {
               }
               if (k === done.length && weight !== null && ex) {
                 const d = draftFor(slot.exerciseId, k + 1, weight, []);
+                const warnings = draftWarnings(ctx, i, d.reps);
                 return (
-                  <div key={`a${k}`} className="l-row active">
-                    <span className="l-set">{k + 1}</span>
-                    <span className="num l-w">{fmtWeight(weight, unit, lib.equipment)}</span>
-                    <span className="l-step">
-                      <button aria-label="One fewer rep" onClick={() => setDraft(slot.exerciseId, k + 1, { ...d, reps: Math.max(0, d.reps - 1) })}>−</button>
-                      <span className="num">{d.reps}</span>
-                      <button aria-label="One more rep" onClick={() => setDraft(slot.exerciseId, k + 1, { ...d, reps: d.reps + 1 })}>+</button>
-                    </span>
-                    <button className="l-rir num" onClick={() => setDraft(slot.exerciseId, k + 1, { ...d, rir: RIRS[(RIRS.indexOf(d.rir) + 1) % RIRS.length] })}>
-                      {d.rir === null ? 'RIR –' : `RIR ${d.rir === 4 ? '4+' : d.rir}`}
-                    </button>
-                    <button className="l-check" aria-label="Log set" onClick={() => onLog(i, d)}>✓</button>
-                  </div>
+                  <Fragment key={`a${k}`}>
+                    {warnings.length > 0 && <div className="l-warn"><CheckThis warnings={warnings} /></div>}
+                    <div className="l-row active">
+                      <span className="l-set">{k + 1}</span>
+                      <span className="num l-w">{fmtWeight(weight, unit, lib.equipment)}</span>
+                      <span className="l-step">
+                        <button aria-label="One fewer rep" onClick={() => setDraft(slot.exerciseId, k + 1, { ...d, reps: Math.max(0, d.reps - 1) })}>−</button>
+                        <span className="num">{d.reps}</span>
+                        <button aria-label="One more rep" onClick={() => setDraft(slot.exerciseId, k + 1, { ...d, reps: d.reps + 1 })}>+</button>
+                      </span>
+                      <button className="l-rir num" onClick={() => setDraft(slot.exerciseId, k + 1, { ...d, rir: RIRS[(RIRS.indexOf(d.rir) + 1) % RIRS.length] })}>
+                        {d.rir === null ? 'RIR –' : `RIR ${d.rir === 4 ? '4+' : d.rir}`}
+                      </button>
+                      <button className="l-check" aria-label="Log set" onClick={() => onLog(i, d)}>✓</button>
+                    </div>
+                  </Fragment>
                 );
               }
               return (

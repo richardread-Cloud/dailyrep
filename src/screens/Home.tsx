@@ -2,18 +2,20 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import type { Go } from '../App';
 import { Brand } from '../components/Brand';
-import { activeSession, cycle, discardSession, getSettings, startSession } from '../data/repo';
+import { activeSession, cycle, discardSession, exercisesWithoutTarget, getSettings, startSession } from '../data/repo';
 import { quoteForDate } from '../lib/library';
 
 /** The opening screen: today's quote, the next workout in the Cycle and a way in. */
 export function Home({ go }: { go: Go }) {
-  const data = useLiveQuery(async () => ({ templates: await cycle(), settings: await getSettings(), active: await activeSession() }), []);
+  const data = useLiveQuery(async () => ({
+    templates: await cycle(), settings: await getSettings(), active: await activeSession(), noTarget: (await exercisesWithoutTarget()).length,
+  }), []);
   const [choosing, setChoosing] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const quote = quoteForDate(new Date());
 
   if (!data) return null;
-  const { templates, settings, active } = data;
+  const { templates, settings, active, noTarget } = data;
   const next = templates[settings.nextTemplate] ?? templates[0];
   const start = async (templateId: string) => go({ name: 'session', id: await startSession(templateId) });
 
@@ -49,6 +51,11 @@ export function Home({ go }: { go: Go }) {
             </span>
           </div>
           <button className="btn-primary" disabled={!next.slots.length} onClick={() => start(next.id)}>Start session</button>
+          {noTarget > 0 && (
+            <button className="link" onClick={() => go({ name: 'program' })}>
+              {noTarget} exercise{noTarget === 1 ? '' : 's'} in your program {noTarget === 1 ? 'has' : 'have'} no target weight. Set {noTarget === 1 ? 'it' : 'them'} ›
+            </button>
+          )}
           {templates.length > 1 && (choosing ? (
             <div className="list">
               {templates.map((t) => (

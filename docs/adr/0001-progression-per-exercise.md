@@ -12,4 +12,10 @@ The rules were validated with `prototypes/progression-PROTOTYPE.html` on 2026-10
 - Going from fewer sets back to more can register as no progress, because later sets drag the average down.
 - When ~10% rounds to no change (e.g. 8 kg with a 2 kg Increment), the Deload is forced down one full Increment, even if that's a 25% cut.
 - Bodyweight Exercises progress by added weight (belt or vest) like any other Exercise. Reps-only Exercises (Push-up, Hanging Leg Raise) can't change weight. Topping the Rep Range there prompts the Lifter to raise the range or move to a harder Exercise, and a Stall shows a notice instead of a Deload. (Decided 2026-10-08.)
-- Changing the Rep Range keeps the weight, so moving to a heavier range climbs one Increment per Session until it's hard enough.
+- Changing the Rep Range keeps the weight. Moving to a heavier range used to climb one Increment per Session; since 2026-10-17 the overshoot rule below gets there faster.
+
+## Added 2026-10-17
+
+- **Baseline.** The first Session in which an Exercise is logged is labelled Baseline and never counts toward a Stall. "First" means no earlier Session that counts (one lasting at least a minute) has sets of it.
+- **Overshoot.** When every planned Working Set reaches the top of the Rep Range, the next Target is the larger of one Increment up and the weight predicted for mid-range reps at RIR 2: median over sets of `weight × (1 + (reps + RIR) / 30)` (missing RIR = 0), divided by `1 + (mid + 2) / 30`, rounded down to the Increment. The rise is capped at +15% or 4 Increments, whichever is smaller. Bodyweight Exercises skip this (their logged weight is only the added load) and rise one Increment. The RIR 0 hold above still applies first.
+- **Sessions under a minute** can't be finished (the Lifter is offered to delete them), so they never affect progression; older ones are left out of the export's session count and of the Baseline check.

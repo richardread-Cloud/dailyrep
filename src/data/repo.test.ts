@@ -1,10 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
-  acceptStarterProgram, activeSession, createCustomExercise, cycle, deleteSet, exerciseHistory, sessionSets, updateSet, exportAll, finishSession, getSettings, importAll,
-  lastSessionSets, logSet, saveTemplate, setTarget, startSession, swapSlot, trainingReport, updateCustomExercise, updateExerciseSettings,
+  acceptStarterProgram, activeSession, addToTemplate, archiveExercise, createCustomExercise, cycle, deleteSet, ensureExercises, exerciseHistory,
+  exercisesWithoutTarget, exportAll, finishSession, getSettings, importAll, lastSessionSets, logSet, removeEmptySessions, resolveUnplanned, saveTemplate,
+  sessionSets, setTarget, shortSessions, startSession, swapSlot, trainingReport, unplannedExercises, unusedExercises, updateCustomExercise,
+  updateExerciseSettings, updateSet,
 } from './repo';
 import { libraryExercise, registerCustomExercises } from '../lib/library';
+
+/** Start a Session that began half an hour ago, so it's long enough to count when finished. */
+async function start(templateId: string): Promise<string> {
+  const id = await startSession(templateId);
+  await db.sessions.update(id, { startedAt: Date.now() - 30 * 60_000 });
+  return id;
+}
 
 beforeEach(async () => {
   await db.delete();
@@ -21,7 +30,7 @@ describe('a full session', () => {
     expect((await db.exercises.get('dip'))).toBeUndefined();
 
     await setTarget('back-squat', 80);
-    const sid = await startSession(templates[0].id);
+    const sid = await start(templates[0].id);
     expect((await activeSession())?.id).toBe(sid);
     for (const reps of [8, 8, 8]) await logSet(sid, 'back-squat', 80, reps, 2);
 
@@ -37,11 +46,11 @@ describe('a full session', () => {
     await acceptStarterProgram();
     const [a] = await cycle();
     await setTarget('bench-press', 60);
-    const first = await startSession(a.id);
+    const first = await start(a.id);
     await logSet(first, 'bench-press', 60, 8, null);
     await logSet(first, 'bench-press', 60, 7, 1);
     await finishSession(first);
-    const second = await startSession(a.id);
+    const second = await start(a.id);
     await logSet(second, 'bench-press', 60, 9, null);
     const last = await lastSessionSets('bench-press', second);
     expect(last.map((x) => x.reps)).toEqual([8, 7]);
@@ -51,7 +60,7 @@ describe('a full session', () => {
   it('a swapped exercise progresses on its own and leaves the original alone', async () => {
     await acceptStarterProgram();
     const [a] = await cycle();
-    const sid = await startSession(a.id);
+    const sid = await start(a.id);
     await swapSlot(sid, 1, 'db-bench-press');
     await setTarget('db-bench-press', 24);
     for (const reps of [12, 12, 12]) await logSet(sid, 'db-bench-press', 24, reps, null);
@@ -73,7 +82,7 @@ describe('custom exercises', () => {
     await setTarget(id, 100);
     // Read from the database, not the in-memory registry, so finishing works even before the app has registered it.
     registerCustomExercises([]);
-    const sid = await startSession(a.id);
+    const sid = await start(a.id);
     for (const reps of [15, 15]) await logSet(sid, id, 100, reps, null);
     expect((await finishSession(sid))[0]).toMatchObject({ exerciseId: id, kind: 'up', nextWeight: 105 });
   });
@@ -101,12 +110,162 @@ describe('custom exercises', () => {
   });
 });
 
+describe('empty sessions', () => {
+  it('finishing with no sets deletes the session and keeps the Cycle where it was', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    const sid = await start(a.id);
+    expect(await finishSession(sid)).toEqual([]);
+    expect(await db.sessions.get(sid)).toBeUndefined();
+    expect((await getSettings()).nextTemplate).toBe(0);
+  });
+
+  it('deleting the last set of a finished session deletes the session', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    const sid = await start(a.id);
+    const s1 = await logSet(sid, 'bench-press', 60, 8, null);
+    const s2 = await logSet(sid, 'bench-press', 60, 8, null);
+    await finishSession(sid);
+    await deleteSet(s1.id);
+    expect(await db.sessions.get(sid)).toBeDefined();
+    await deleteSet(s2.id);
+    expect(await db.sessions.get(sid)).toBeUndefined();
+  });
+
+  it('clears out empty finished sessions but leaves the one in progress', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    await db.sessions.put({ id: 'old', templateId: a.id, templateName: a.name, startedAt: 1, finishedAt: 2, plan: [], ui: {} as never });
+    const live = await start(a.id);
+    await removeEmptySessions();
+    expect(await db.sessions.get('old')).toBeUndefined();
+    expect(await db.sessions.get(live)).toBeDefined();
+  });
+});
+
+describe('sessions under a minute', () => {
+  it("can't be finished, so they never touch progression or the Cycle", async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    await setTarget('back-squat', 80);
+    const sid = await startSession(a.id);
+    for (const reps of [8, 8, 8]) await logSet(sid, 'back-squat', 80, reps, null);
+    await expect(finishSession(sid)).rejects.toThrow('under a minute');
+    expect((await db.exercises.get('back-squat'))?.targetWeight).toBe(80);
+    expect((await getSettings()).nextTemplate).toBe(0);
+  });
+
+  it("old ones don't count in the export, or as an earlier session for a Baseline", async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    await setTarget('bench-press', 60);
+    // A session finished within seconds, from before they were refused.
+    await db.sessions.put({ id: 'quick', templateId: a.id, templateName: a.name, startedAt: 1000, finishedAt: 5000, plan: [], ui: {} as never });
+    await db.sets.put({ id: 'q1', sessionId: 'quick', exerciseId: 'bench-press', n: 1, weight: 60, reps: 8, rir: null, loggedAt: 2000 });
+    expect((await shortSessions()).map((s) => s.id)).toEqual(['quick']);
+
+    const sid = await start(a.id);
+    for (const reps of [6, 6, 5]) await logSet(sid, 'bench-press', 60, reps, null);
+    expect((await finishSession(sid))[0]).toMatchObject({ kind: 'baseline', summary: 'Baseline' });
+    expect(await trainingReport()).toContain('1 finished session,');
+  });
+});
+
+describe('Baseline', () => {
+  it('only the first session of an Exercise is a Baseline', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    await setTarget('bench-press', 60);
+    const one = await start(a.id);
+    for (const reps of [6, 6, 5]) await logSet(one, 'bench-press', 60, reps, null);
+    expect((await finishSession(one))[0].kind).toBe('baseline');
+    const two = await start(a.id);
+    for (const reps of [7, 6, 6]) await logSet(two, 'bench-press', 60, reps, null);
+    expect((await finishSession(two))[0].kind).toBe('prog');
+  });
+});
+
+describe('program and log mismatches', () => {
+  it('a one-off Swap leaves the program alone and is labelled a substitution in the export', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    const sid = await start(a.id);
+    await swapSlot(sid, 1, 'db-bench-press');
+    expect((await db.templates.get(a.id))?.slots[1].exerciseId).toBe('bench-press');
+    await setTarget('db-bench-press', 24);
+    await logSet(sid, 'db-bench-press', 24, 10, null);
+    await finishSession(sid);
+    expect(await trainingReport()).toContain('Dumbbell Bench Press (substitution for Bench Press)');
+  });
+
+  it('a permanent Swap changes the program too', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    const sid = await start(a.id);
+    await swapSlot(sid, 1, 'db-bench-press', true);
+    expect((await db.templates.get(a.id))?.slots[1]).toEqual({ exerciseId: 'db-bench-press', sets: 3 });
+    expect((await db.sessions.get(sid))?.plan[1]).toEqual({ exerciseId: 'db-bench-press', sets: 3 });
+  });
+
+  it('finds sets logged outside the plan and settles them one-off or permanently', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    const sid = await start(a.id);
+    await logSet(sid, 'back-squat', 80, 8, null);
+    const moved = await logSet(sid, 'bench-press', 60, 8, null);
+    await finishSession(sid);
+    await updateSet(moved.id, { exerciseId: 'db-bench-press' });   // corrected in History
+
+    const [u] = await unplannedExercises(sid);
+    expect(u.exerciseId).toBe('db-bench-press');
+    expect(u.unlogged).toContain('bench-press');
+
+    await resolveUnplanned(sid, 'db-bench-press', 'bench-press', false);
+    expect((await db.sessions.get(sid))?.plan[1]).toEqual({ exerciseId: 'db-bench-press', sets: 3, swappedFrom: 'bench-press' });
+    expect((await db.templates.get(a.id))?.slots[1].exerciseId).toBe('bench-press');
+    expect(await unplannedExercises(sid)).toEqual([]);
+  });
+
+  it('a permanent fix replaces the Exercise in the program', async () => {
+    await acceptStarterProgram();
+    const [a] = await cycle();
+    const sid = await start(a.id);
+    const x = await logSet(sid, 'bench-press', 60, 8, null);
+    await finishSession(sid);
+    await updateSet(x.id, { exerciseId: 'db-bench-press' });
+    await resolveUnplanned(sid, 'db-bench-press', 'bench-press', true);
+    expect((await db.templates.get(a.id))?.slots[1].exerciseId).toBe('db-bench-press');
+  });
+
+  it('flags trained Exercises that are in no workout, until archived or added back', async () => {
+    await acceptStarterProgram();
+    const [a, b] = await cycle();
+    await ensureExercises(['hip-thrust', 'leg-extension']);
+    await setTarget('hip-thrust', 100);   // has a target: flagged; leg-extension was only looked at: not flagged
+    expect((await unusedExercises()).map((e) => e.id)).toEqual(['hip-thrust']);
+    await archiveExercise('hip-thrust');
+    expect(await unusedExercises()).toEqual([]);
+    await addToTemplate(b.id, 'hip-thrust');
+    expect((await db.exercises.get('hip-thrust'))?.archived).toBe(false);
+    expect((await db.templates.get(b.id))?.slots.at(-1)).toEqual({ exerciseId: 'hip-thrust', sets: 3 });
+    expect(a).toBeDefined();
+  });
+
+  it('lists programmed Exercises with no target weight', async () => {
+    await acceptStarterProgram();
+    expect(await exercisesWithoutTarget()).toContain('back-squat');
+    await setTarget('back-squat', 80);
+    expect(await exercisesWithoutTarget()).not.toContain('back-squat');
+  });
+});
+
 describe('correcting logged sets', () => {
   it('fixes weight, reps and RIR without touching the Target', async () => {
     await acceptStarterProgram();
     const [a] = await cycle();
     await setTarget('back-squat', 80);
-    const sid = await startSession(a.id);
+    const sid = await start(a.id);
     const s1 = await logSet(sid, 'back-squat', 80, 8, null);
     await finishSession(sid);
     const target = (await db.exercises.get('back-squat'))?.targetWeight;
@@ -119,7 +278,7 @@ describe('correcting logged sets', () => {
   it('moves a set to another exercise and renumbers both', async () => {
     await acceptStarterProgram();
     const [a] = await cycle();
-    const sid = await startSession(a.id);
+    const sid = await start(a.id);
     const s1 = await logSet(sid, 'bench-press', 60, 8, null);
     const s2 = await logSet(sid, 'bench-press', 60, 8, null);
     const s3 = await logSet(sid, 'bench-press', 60, 7, null);
@@ -138,15 +297,16 @@ describe('training report', () => {
     await acceptStarterProgram();
     const [a] = await cycle();
     await setTarget('back-squat', 80);
-    const sid = await startSession(a.id);
+    const sid = await start(a.id);
     await logSet(sid, 'back-squat', 80, 8, 2);
     await logSet(sid, 'back-squat', 80, 7, null);
     await finishSession(sid);
-    await startSession(a.id);   // unfinished: left out
+    await start(a.id);   // unfinished: left out
 
     const text = await trainingReport();
     expect(text).toContain('1 finished session,');
-    expect(text).toMatch(/\| Back Squat \| Legs \| 80 kg \| \d+–\d+ \| 2\.5 kg \| 1 \|/);
+    expect(text).toMatch(/\| Back Squat \| Legs \| 80 kg \| \d+–\d+ \| 2\.5 kg \| 0 \|/);
+    expect(text).toContain('80 kg × 7 → Baseline');
     expect(text).toContain('- **Full Body A**: Back Squat');
     expect(text).toContain('80 kg × 8 @RIR 2, 80 kg × 7');
     expect(text.match(/### /g)).toHaveLength(1);

@@ -190,6 +190,7 @@ ol.live li.on::marker { color: var(--accent-text); font-weight: 700; }
 .l-open { font-size: 13px; color: var(--accent-text); font-weight: 600; }
 .l-count { font-size: 22px; font-weight: 700; color: var(--muted); }
 .l-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto 40px; gap: 8px; align-items: center; min-height: 52px; padding: 6px 12px 6px 14px; border-top: 1px solid var(--line); }
+.l-warn { padding: 8px 12px; border-top: 1px solid var(--line); }
 .l-row.warm { color: var(--muted); min-height: 44px; font-size: 14px; }
 .l-row.logged { background: var(--good-soft); }
 .l-row.future { color: var(--muted); }
@@ -221,6 +222,7 @@ ol.live li.on::marker { color: var(--accent-text); font-weight: 700; }
 .kind-up, .kind-prog, .kind-top { color: var(--good); }
 .kind-hold, .kind-none, .kind-stall { color: var(--warn); }
 .kind-deload { color: var(--bad); }
+.kind-baseline { color: var(--accent-text); }
 
 /* chart */
 .chart { position: relative; }

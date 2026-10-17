@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { db } from './data/db';
-import { getSettings } from './data/repo';
+import { getSettings, removeEmptySessions } from './data/repo';
 import { registerCustomExercises } from './lib/library';
 import { ExerciseScreen } from './screens/ExerciseScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
@@ -36,7 +36,7 @@ export function App() {
   if (customs) registerCustomExercises(customs);
 
   useEffect(() => {
-    db.open().catch((e: unknown) => setDbError(e instanceof Error ? e.message : String(e)));
+    db.open().then(removeEmptySessions).catch((e: unknown) => setDbError(e instanceof Error ? e.message : String(e)));
   }, []);
 
   const go: Go = (r) => { setRoute(r); window.scrollTo(0, 0); };

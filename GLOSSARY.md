@@ -70,6 +70,10 @@ _Avoid_: Break, rest time
 The rule by which reps are added at a fixed weight until every Working Set reaches the top of the Rep Range, after which the weight rises by one Increment and reps return to the bottom of the range.
 _Avoid_: Auto-progression, overload
 
+**Baseline**:
+The result of the first Session in which an Exercise is logged; it sets the reps to beat and never counts toward a Stall.
+_Avoid_: First session, benchmark
+
 **Stall**:
 An Exercise that has failed to improve its weight or its average reps per Working Set across three consecutive Sessions in which it was performed.
 _Avoid_: Plateau
@@ -93,8 +97,8 @@ One visit to the gym in which a Template is performed, possibly with Slots swapp
 _Avoid_: Workout, training
 
 **Swap**:
-Performing a different Exercise in place of a Slot's Exercise for one Session; the substitute progresses as normal and the original Exercise is untouched.
-_Avoid_: Substitution, replacement
+Performing a different Exercise in place of a Slot's Exercise, either for one Session only (shown as a substitution) or permanently, which also changes the Template; the substitute progresses as normal and the original Exercise is untouched.
+_Avoid_: Replacement
 
 **Set**:
 One continuous bout of an Exercise, recorded as weight × reps achieved, plus an optional RIR.
