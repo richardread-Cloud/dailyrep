@@ -327,7 +327,7 @@ export async function trainingReport(): Promise<string> {
   for (const s of sessions) {
     const mins = Math.round(((s.finishedAt ?? s.startedAt) - s.startedAt) / 60000);
     out.push('', `### ${day(s.startedAt)} — ${s.templateName} (${mins} min)`);
-    const mine = sets.filter((x) => x.sessionId === s.id).sort((a, b) => a.loggedAt - b.loggedAt);
+    const mine = sets.filter((x) => x.sessionId === s.id).sort((a, b) => a.loggedAt - b.loggedAt || a.n - b.n);
     const ids = [...new Set([...s.plan.map((p) => p.exerciseId), ...mine.map((x) => x.exerciseId)])];
     for (const id of ids) {
       const done = mine.filter((x) => x.exerciseId === id);
